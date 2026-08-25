@@ -1,0 +1,51 @@
+{
+  "@context": "http://schema.org/",
+  "@type": "JobPosting",
+  "title": "Project Manager (PM) - Phòng Lab Công Nghệ - Lương Upto 60tr - Đi Làm Ngay (Hà Nội)",
+  "description": "<h2>Mô tả công việc</h2>\n<ul><li>Lập và quản lý kế hoạch tổng thể, kế hoạch chi tiết cho các hạng mục của Phòng Lab.</li><li>Điều phối công việc giữa các nhóm Phần mềm, AI, IoT, Realtime, Hạ tầng, Nghệ thuật và Sản xuất nội dung.</li><li>Theo dõi tiến độ, nguồn lực, ngân sách, chất lượng, rủi ro và các mốc nghiệm thu.</li><li>Làm việc trực tiếp với chủ đầu tư, đối tác, nhà cung cấp và các bên liên quan.</li><li>Tổ chức họp dự án, phân công công việc, theo dõi và đôn đốc các đầu việc.</li><li>Quản lý yêu cầu, phạm vi công việc, tài liệu kỹ thuật, hồ sơ demo và nghiệm thu.</li><li>Phối hợp xử lý các vấn đề kỹ thuật và đề xuất phương án triển khai phù hợp.</li><li>Tổng hợp báo cáo tiến độ định kỳ và báo cáo các vấn đề cần Ban lãnh đạo quyết định.</li><li>Tham gia quản lý các hạng mục Immersive, VR/AR, Dome, Smart City, AI Camera, IoT, Robot và các hệ thống phần mềm tích hợp.</li></ul>\n<h2>Yêu cầu ứng viên</h2>\n<ul><li>Tốt nghiệp đại học chuyên ngành Công nghệ thông tin, Kỹ thuật phần mềm, Hệ thống thông tin hoặc ngành liên quan.</li><li>Có từ 3 năm kinh nghiệm ở vị trí Project Manager, Technical Project Manager, Team Lead hoặc tương đương.</li><li>Ưu tiên ứng viên có nền tảng kỹ thuật, từng làm Developer, Technical Lead hoặc trực tiếp tham gia phát triển phần mềm.</li><li>Có khả năng đọc hiểu tài liệu kỹ thuật và nắm được quy trình phát triển phần mềm, tích hợp hệ thống, API, cơ sở dữ liệu, kiểm thử và triển khai.</li><li>Có khả năng trao đổi, phân tích và điều phối công việc vớ...",
+  "identifier": {
+    "@type": "PropertyValue",
+    "name": "Công ty cổ phần Công nghệ Proton",
+    "value": 155592
+  },
+  "datePosted": "2026-08-06",
+  "validThrough": "2026-09-05T23:59:59+07:00",
+  "employmentType": "FULL_TIME",
+  "hiringOrganization": {
+    "@type": "Organization",
+    "name": "Công ty cổ phần Công nghệ Proton",
+    "sameAs": "https://www.topcv.vn/cong-ty/cong-ty-co-phan-cong-nghe-proton/155592.html",
+    "logo": "https://cdn-new.topcv.vn/unsafe/https://static.topcv.vn/company_logos/h2noMkXOK8jZS1gklA1X0LLIXArGO5ZR_1766389952____e646532eae57f50f693d82212bbc0d65.png"
+  },
+  "jobLocation": {
+    "@type": "Place",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Sân Golf",
+      "addressLocality": "Phường Long Biên",
+      "addressRegion": "Hà Nội",
+      "postalCode": 100000,
+      "addressCountry": "VN"
+    }
+  },
+  "baseSalary": {
+    "@type": "MonetaryAmount",
+    "currency": "VND",
+    "value": {
+      "@type": "QuantitativeValue",
+      "unitText": "MONTH",
+      "minValue": 50000000,
+      "maxValue": 60000000
+    }
+  },
+  "industry": "IT phần mềm, Công nghệ thông tin",
+  "jobBenefits": "<ul><li>Mức lương cạnh tranh, thỏa thuận theo năng lực và kinh nghiệm.</li><li>Thưởng theo hiệu quả công việc và kết quả dự án.</li><li>Được tham gia các dự án công nghệ, nghệ thuật số, bảo tàng và không gian trải nghiệm quy mô lớn.</li><li>Làm việc trực tiếp với đội ngũ chuyên gia công nghệ, nghệ thuật và các nhà cung cấp trong và ngoài nước.</li><li>Môi trường làm việc đa ngành, sáng tạo, có cơ hội phát triển chuyên môn và năng lực quản lý.</li><li>Có cơ hội phát triển lên vị trí Senior Project Manager, Program Manager hoặc vị trí quản lý cao hơn.</li><li>Hưởng đầy đủ các chế độ theo quy định của công ty và pháp luật.</li></ul>",
+  "employerOverview": "<ul><li>Lập và quản lý kế hoạch tổng thể, kế hoạch chi tiết cho các hạng mục của Phòng Lab.</li><li>Điều phối công việc giữa các nhóm Phần mềm, AI, IoT, Realtime, Hạ tầng, Nghệ thuật và Sản xuất nội dung.</li><li>Theo dõi tiến độ, nguồn lực, ngân sách, chất lượng, rủi ro và các mốc nghiệm thu.</li><li>Làm việc trực tiếp với chủ đầu tư, đối tác, nhà cung cấp và các bên liên quan.</li><li>Tổ chức họp dự án, phân công công việc, theo dõi và đôn đốc các đầu việc.</li><li>Quản lý yêu cầu, phạm vi công việc, tài liệu kỹ thuật, hồ sơ demo và nghiệm thu.</li><li>Phối hợp xử lý các vấn đề kỹ thuật và đề xuất phương án triển khai phù hợp.</li><li>Tổng hợp báo cáo tiến độ định kỳ và báo cáo các vấn đề cần Ban lãnh đạo quyết định.</li><li>Tham gia quản lý các hạng mục Immersive, VR/AR, Dome, Smart City, AI Camera, IoT, Robot và các hệ thống phần mềm tích hợp.</li></ul>",
+  "occupationalCategory": "Trưởng/Phó phòng",
+  "experienceRequirements": {
+    "@type": "OccupationalExperienceRequirements",
+    "monthsOfExperience": 36
+  },
+  "skills": "Giao tiếp, Quản Lý Dự Án, đọc hiểu tài liệu kỹ thuật, Xử lý vấn đề, tổ chức, Tổng hợp báo cáo, Điều Phối Công Việc, Sử dụng Jira, Sử dụng Confluence, quản lý phạm vi, tiến độ, nguồn lực, ngân sách, chất lượng, rủi ro, AI, IOT, developer, Nội Dung Số, triển lãm, Smart City, technical lead, bảo tàng",
+  "totalJobOpenings": 1
+}

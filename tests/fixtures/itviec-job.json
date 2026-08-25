@@ -1,0 +1,51 @@
+{
+  "@context": "http://schema.org",
+  "@type": "JobPosting",
+  "industry": "Information Technology",
+  "title": "AI Software Engineer Python/Go/C/C++  AI Agents",
+  "datePosted": "2026-08-22",
+  "validThrough": "2026-09-26",
+  "skills": "Python, FastAPI, Docker, Golang, AI, C++",
+  "description": "Top 3 Reasons To Join Us\r\nMức lương cạnh tranh, hấp dẫn\r\nMôi trường làm việc chuyên nghiệp, thân thiện\r\nĐược làm việc với các hệ thống hiện đại, tiên tiến\r\nThe Job\r\n<p><strong>2026TD450888 - AI Software Engineer (Python/Go/C/C++ Backend &amp; AI Agents)</strong></p><p>Xây dựng phát triển các sản phẩm AI có khả năng tự động lập kế hoạch, ra quyết định và thực thi hành động, được triển khai thực tế ở quy mô lớn, các hệ thống AI thế hệ mới như:<br>- AI Agents (Autonomous Agents)<br>- LLM-powered Applications<br>- Multi-agent Workflow Systems<br>- AI-driven Backend Services<br>- Intelligent Automation Platforms</p><p><strong>Trách nhiệm công việc (Responsibilities):</strong><br>- Thiết kế và phát triển các hệ thống Backend tích hợp AI/LLM Agents.<br>- Xây dựng các Agentic Workflow, A: Planning – Tool Use – Memory – Execution.<br>- Phát triển các dịch vụ AI dưới dạng Microservices (FastAPI/Flask/Django hoặc Java/Go services).<br>- Tích hợp các mô hình AI vào hệ thống sản phẩm qua REST/gRPC APIs.<br>- Triển khai hệ thống AI production-ready với Docker/Kubernetes.<br>- Tối ưu hiệu năng inference: latency, throughput, cost.<br>- Làm việc với dữ liệu lớn và hệ thống có lượng người dùng cao (đặc biệt trong tài chính/ngân hàng/chứng khoán).<br>- Nghiên cứu và ứng dụng các kỹ thuật mới: RAG, Function Calling, Multi-agent systems, Reinforcement Learning Agents.<br>- Đảm bảo các tiêu chuẩn về bảo mật, an toàn và khả năng mở rộng của hệ thống AI.</p>\r\nYour Skills and Experience\r\n<p>- Tốt ng...",
+  "potentialAction": {
+    "@type": "ApplyAction",
+    "target": "https://itviec.com/job/ai-software-engineer-python-go-c-c-ai-agents-mb-bank-4101/job_applications/new"
+  },
+  "hiringOrganization": {
+    "@type": "Organization",
+    "logo": "https://itviec.com/rails/active_storage/representations/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MjM1MzI1NSwicHVyIjoiYmxvYl9pZCJ9fQ==--ce13bc877c6ba6ce4f69b2dca684629e102ea643/eyJfcmFpbHMiOnsiZGF0YSI6eyJmb3JtYXQiOiJwbmciLCJyZXNpemVfdG9fZml0IjpbMTcwLG51bGxdfSwicHVyIjoidmFyaWF0aW9uIn19--f02e0eabf9f34431b8e6312d2e4f969eef4fa3a8/Logo%20MB%20he%20mau%20RGB%2001.png",
+    "name": "MB Bank",
+    "description": "Ngân hàng TMCP Quân Đội (MB)"
+  },
+  "employmentType": "FULL_TIME",
+  "jobLocation": [
+    {
+      "@type": "Place",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Tòa nhà MB, số 18 Lê Văn Lương, Phường Yên Hòa",
+        "addressLocality": "Not Available",
+        "addressRegion": "Hà Nội",
+        "postalCode": "100000",
+        "addressCountry": "VN"
+      }
+    }
+  ],
+  "baseSalary": {
+    "@type": "MonetaryAmount",
+    "currency": "USD",
+    "value": {
+      "@type": "QuantitativeValue",
+      "minValue": 800,
+      "maxValue": 2000,
+      "unitText": "MONTH",
+      "value": "800 - 2,000 USD"
+    }
+  },
+  "directApply": "TRUE",
+  "jobBenefits": "<p><strong>Trải nghiệm Thu nhập hấp dẫn với gói đãi ngộ toàn diện:</strong>&nbsp;</p><ul><li>Thưởng&nbsp;thành tích tháng 13; Thưởng thành tích theo kết quả công việc 06 tháng, 1 năm ; Thưởng các&nbsp;dịp lễ tết trong năm ; Thưởng theo danh hiệu cá nhân và tập thể…&nbsp;</li><li>Du lịch nghỉ dưỡng hàng năm</li><li>Khám sức khỏe định kì</li><li>Gói bảo hiểm sức khỏe cá nhân và người thân (MIC)</li><li>Quà tặng và ngày nghỉ sinh nhật hưởng nguyên lương&nbsp;</li></ul><p><strong>Cơ hội nghề nghiệp và phát triển bản thân:</strong>&nbsp;</p><ul><li>Được thử sức với các nền tảng công nghệ mới, tham gia vào những dự án chuyển đổi lớn của ngân hàng&nbsp;</li><li>Có cơ hội học hỏi từ các Chuyên gia, Lãnh đạo nội bộ hàng đầu tại MB trong lĩnh vực IT, Tài chính ngân hàng&nbsp;</li><li>Được trải nghiệm các&nbsp;phương pháp học tập&nbsp;mới và&nbsp;phát triển năng lực theo lộ trình công danh.&nbsp;</li><li>Hưởng các chính sách hỗ trợ, khuyến khích học tập, nâng cao trình độ và phát triển bản thân (chứng chỉ nghề quốc tế...)&nbsp;</li></ul><p><strong>Môi trường làm việc lý tưởng với:</strong>&nbsp;</p><ul><li>Những người cộng sự thân thiện và tài năng&nbsp;</li><li>Cơ sở vật chất, không gian làm việc xanh và hiện đại.<br>&nbsp;</li></ul>",
+  "experienceRequirements": {
+    "@type": "OccupationalExperienceRequirements",
+    "monthsOfExperience": 10
+  }
+}

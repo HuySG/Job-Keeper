@@ -1,0 +1,414 @@
+// Bae-Job — thu thập tin tuyển dụng đa nguồn.
+//
+// Ba ràng buộc định hình schema này (PLAN.md §1):
+//   1. Đa nguồn, MỞ      -> Source là DỮ LIỆU, thêm nguồn không phải sửa code
+//   2. Tin phải còn sống -> JobPosting mang đủ tín hiệu cho máy kiểm 4 tầng
+//   3. Ngành nghề do NGƯỜI DÙNG định nghĩa -> UserField giữ vector centroid
+//
+// Bắt buộc PostgreSQL (không chạy được trên SQLite): cần pg_trgm cho khử trùng
+// lặp, unaccent cho FTS tiếng Việt, pgvector cho tìm theo ngành. TECHSTACK.md §6.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NGUỒN
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Một sàn tuyển dụng. Cố ý để mọi thứ đặc thù của nguồn nằm ở ĐÂY chứ không
+/// nằm trong code: thêm nguồn mới lý tưởng là INSERT một dòng, không phải deploy.
+model Source {
+  id      Int     @id @default(autoincrement())
+  /// Mã ngắn dùng trong code và trong khoá blob: "vnw" | "topcv" | "itviec"
+  code    String  @unique
+  name    String
+  homeUrl String
+
+  /// "api" | "sitemap-jsonld" | "list-jsonld" — quyết định adapter nào chạy.
+  /// Xem src/crawler/sources/registry.ts
+  kind    String  @default("sitemap-jsonld")
+
+  /// Điểm vào của lớp khám phá. Với kind="sitemap-jsonld" là URL sitemap index.
+  /// Với kind="api" là endpoint. TECHSTACK.md §1: sitemap là đường vận tải.
+  entryUrl String?
+
+  /// Chỉ URL khớp regex này mới được coi là trang chi tiết job. Bắt buộc với
+  /// nguồn sitemap: ITviec có /it-jobs/backend-developer là trang CHUYÊN MỤC
+  /// còn /it-jobs/<slug>-4101 mới là job. Không lọc là nuốt nhầm cả nghìn trang.
+  jobUrlPattern String?
+
+  /// Tham số riêng của adapter (selector vá trường thiếu, body API, ...).
+  /// Để JSON để thêm nguồn không phải migrate.
+  config Json?
+
+  /// Nhỏ hơn = tin hơn khi hai nguồn nói khác nhau về cùng một việc.
+  priority Int @default(100)
+
+  /// "manual" | "search" | "referral" — TECHSTACK.md §1: search API chỉ dùng
+  /// để TRINH SÁT nguồn mới, ghi lại nguồn nào tìm ra bằng cách nào.
+  discoveredVia String @default("manual")
+
+  isActive Boolean @default(true)
+
+  postings JobPosting[]
+  runs     CrawlRunSource[]
+
+  @@index([isActive, priority])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CÔNG TY
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Pháp nhân đã chuẩn hoá. Nhiều cách viết -> một công ty, nếu không thì thống
+/// kê "công ty nào tuyển nhiều nhất" sẽ chia năm xẻ bảy vô nghĩa.
+model Company {
+  id      Int     @id @default(autoincrement())
+  slug    String  @unique
+  name    String
+  /// Mã số thuế — khoá gộp đáng tin nhất khi lấy được, vì tên thì viết kiểu gì
+  /// cũng có, còn MST thì duy nhất.
+  taxCode String?
+  website String?
+  logoUrl String?
+
+  aliases  CompanyAlias[]
+  postings JobPosting[]
+
+  @@index([taxCode])
+}
+
+model CompanyAlias {
+  id        Int     @id @default(autoincrement())
+  /// Đã lowercase, bỏ dấu, bỏ tiền tố "công ty tnhh/cổ phần/..." — xem
+  /// src/crawler/normalize/text.ts normalizeCompanyName()
+  raw       String  @unique
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIN ĐĂNG
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// MỘT TIN ĐĂNG trên MỘT sàn. Cùng một công việc đăng ở 3 sàn = 3 dòng ở đây,
+/// gộp lại ở JobGroup. Không gộp thẳng vì khử trùng lặp chắc chắn có lúc sai,
+/// và khi sai thì phải gỡ được mà không mất dữ liệu gốc của từng sàn.
+model JobPosting {
+  id         Int    @id @default(autoincrement())
+  sourceId   Int
+  source     Source @relation(fields: [sourceId], references: [id])
+  /// Mã của riêng sàn đó. Hai sàn có thể trùng mã nên không @unique một mình.
+  externalId String
+  /// ĐÃ CẮT query string. TopCV gắn ?ta_source=...&u_sr_id=... vào mọi link ở
+  /// trang danh sách — không cắt thì mỗi lần crawl đẻ ra một URL "mới" và
+  /// trùng lặp vô hạn. Xem PLAN.md §2.
+  url        String @unique
+
+  title     String
+  /// Đã chuẩn hoá (lowercase, bỏ dấu, bỏ nhiễu) để so khớp và gộp trùng
+  titleNorm String
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  /// Đã tước thẻ HTML và CẮT <= 8 KB. Toàn văn nằm trên blob store, không nằm
+  /// đây — vừa vì hạn mức DB, vừa vì bản quyền (PLAN.md §7).
+  descriptionText String?
+  /// SHA-256 của nội dung đã chuẩn hoá. Đổi hash = tin bị sửa.
+  contentHash     String
+  /// KHOÁ trỏ tới blob thô trên R2/đĩa, KHÔNG PHẢI nội dung.
+  /// Dạng: {sourceCode}/{yyyy-MM}/{externalId}.json.gz
+  /// Đây là thứ cho phép `npm run reparse` tính lại toàn bộ lịch sử mà không
+  /// cào lại nguồn — siêu năng lực quan trọng nhất khi có 6 nguồn.
+  rawKey          String?
+
+  // ── Lương: đã quy về VND/tháng ─────────────────────────────────────────────
+  salaryMin      Int?
+  salaryMax      Int?
+  /// Tiền tệ GỐC trước quy đổi, để truy vết
+  salaryCurrency String  @default("VND")
+  salaryPeriod   String  @default("MONTH")
+  /// false = "Thoả thuận"/"Cạnh tranh". PHẢI dùng cờ này chứ không được đặt
+  /// salaryMin = 0: số 0 lọt vào thì mọi trung vị đều sai.
+  salaryIsPublic Boolean @default(false)
+  salaryRaw      String?
+  /// Tỷ giá và ngày áp dụng, chỉ có khi salaryCurrency != "VND". Lưu kèm để
+  /// đổi tỷ giá sau này không làm sai lệch dữ liệu đã thu.
+  fxRate         Float?
+  fxRateDate     DateTime?
+
+  employmentType String? // FULL_TIME | PART_TIME | CONTRACT | INTERN | TEMPORARY
+  workMode       String? // ONSITE | HYBRID | REMOTE
+  level          String? // INTERN | FRESHER | JUNIOR | MID | SENIOR | LEAD | MANAGER
+  yearsExpMin    Int?
+  yearsExpMax    Int?
+
+  // ── Vòng đời: dữ liệu cho máy kiểm 4 tầng (TECHSTACK.md §4) ────────────────
+  postedAt    DateTime
+  /// validThrough của schema.org. Tầng 1 của máy kiểm — 0 request.
+  expiresAt   DateTime?
+  /// OPEN | STALE | EXPIRED | CLOSED — xem src/enums JobStatus
+  status      String    @default("OPEN")
+  /// Lý do chuyển trạng thái gần nhất, để gỡ rối khi nghi máy kiểm sai
+  statusReason String?
+  /// Lần cuối còn THẤY tin trong sitemap/danh sách của nguồn (tầng 2, ~0 chi phí)
+  lastSeenAt  DateTime
+  /// Lần cuối THỰC SỰ gọi HTTP vào trang này (tầng 3/4, tốn request).
+  /// Chênh lệch giữa lastSeenAt và lastCheckedAt chính là thứ hiển thị cho
+  /// người dùng: "kiểm lần cuối N giờ trước".
+  lastCheckedAt DateTime?
+  /// Số lần liên tiếp vắng mặt khỏi sitemap. >=1 -> STALE, >=3 -> CLOSED
+  missCount   Int       @default(0)
+  /// Header cho conditional GET (tầng 3): 304 thì không phải tải lại body
+  etag            String?
+  lastModifiedHdr String?
+
+  // ── Gộp trùng ──────────────────────────────────────────────────────────────
+  jobGroupId Int?
+  jobGroup   JobGroup? @relation(fields: [jobGroupId], references: [id])
+
+  parseStatus String  @default("OK") // OK | PARTIAL | FAILED
+  parseError  String?
+
+  locations JobLocation[]
+  skills    JobSkill[]
+  audits    JobAudit[]
+
+  crawledAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceId, externalId])
+  @@index([status, postedAt])
+  @@index([postedAt])
+  @@index([companyId])
+  @@index([sourceId, lastSeenAt])
+  /// Cho máy kiểm: chọn nhanh job sắp hết hạn hoặc lâu chưa kiểm
+  @@index([status, expiresAt])
+  @@index([status, lastCheckedAt])
+  @@index([jobGroupId])
+}
+
+/// Nhóm các tin đăng được xác định là CÙNG MỘT VIỆC ở nhiều sàn.
+model JobGroup {
+  id          Int      @id @default(autoincrement())
+  /// companyNorm|titleNorm|province — khoá cứng, bắt được phần lớn
+  fingerprint String   @unique
+  /// Tin đại diện: chọn nguồn có priority nhỏ nhất
+  canonicalId Int?
+  firstSeenAt DateTime
+  lastSeenAt  DateTime
+  /// Đăng đi đăng lại nhiều lần trong 90 ngày = dấu hiệu tin tuyển ảo
+  repostCount Int      @default(1)
+
+  postings JobPosting[]
+
+  @@index([lastSeenAt])
+}
+
+/// Lưu vết khi một tin bị nguồn sửa. Không có bảng này thì số cũ biến mất im
+/// lặng và không cách nào đối chiếu — bài học từ PriceAudit của dự án crapper.
+model JobAudit {
+  id        Int      @id @default(autoincrement())
+  postingId Int
+  posting   JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  /// "salary" | "status" | "expiry" | "title"
+  field     String
+  oldValue  String?
+  newValue  String?
+  /// "source_edited" | "manual_fix" | "reparse"
+  reason    String
+  changedAt DateTime @default(now())
+
+  @@index([postingId])
+  @@index([changedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHÂN LOẠI
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Skill {
+  id       Int    @id @default(autoincrement())
+  slug     String @unique
+  name     String
+  /// LANG | FRAMEWORK | DB | CLOUD | TOOL | DOMAIN | SOFT
+  category String
+
+  aliases SkillAlias[]
+  jobs    JobSkill[]
+
+  @@index([category])
+}
+
+model SkillAlias {
+  id      Int    @id @default(autoincrement())
+  /// "reactjs", "react.js", "react js" -> react
+  raw     String @unique
+  skillId Int
+  skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+}
+
+model JobSkill {
+  postingId Int
+  skillId   Int
+  posting   JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  skill     Skill      @relation(fields: [skillId], references: [id])
+
+  @@id([postingId, skillId])
+  @@index([skillId])
+}
+
+/// Tỉnh/thành theo đơn vị hành chính hiện hành (34 đơn vị sau sáp nhập 2025).
+/// Nguồn thường trả cấp PHƯỜNG ("Phường Long Biên") nên phải có bảng ánh xạ,
+/// và phải là DỮ LIỆU để cập nhật được, không hard-code trong parser.
+model Location {
+  id       Int    @id @default(autoincrement())
+  slug     String @unique
+  name     String
+  /// Slug của tỉnh/thành cấp trên. Với chính tỉnh thì province = slug.
+  province String
+
+  jobs    JobLocation[]
+  aliases LocationAlias[]
+
+  @@index([province])
+}
+
+model LocationAlias {
+  id         Int      @id @default(autoincrement())
+  raw        String   @unique
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+}
+
+model JobLocation {
+  postingId  Int
+  locationId Int
+  /// Chuỗi gốc trong tin, giữ để đối chiếu khi nghi ánh xạ sai
+  rawText    String
+  posting    JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  location   Location   @relation(fields: [locationId], references: [id])
+
+  @@id([postingId, locationId])
+  @@index([locationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BỘ LỌC ĐÃ LƯU
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Một bộ lọc người dùng đặt tên và lưu lại: "Backend Python ở Hà Nội trên 20tr".
+///
+/// Bản đầu cố ý dùng SQL thường (từ khoá + tỉnh + lương + cấp bậc) chứ KHÔNG
+/// dùng vector. Vector giải bài toán "gõ 'cơ khí' vẫn ra 'CNC operator'" —
+/// bài toán thật, nhưng chỉ đáng giải khi bộ lọc từ khoá đã tỏ ra không đủ.
+/// Làm trước là dựng cả một tầng nhúng cho một người dùng.
+model SavedFilter {
+  id   Int    @id @default(autoincrement())
+  slug String @unique
+  name String
+
+  /// Khớp vào title + descriptionText. Bất kỳ từ nào khớp là tính.
+  keywords  String[] @default([])
+  /// Loại bỏ tin chứa các từ này — lọc nhiễu hiệu quả bất ngờ
+  excludes  String[] @default([])
+  /// Slug tỉnh/thành. Rỗng = mọi nơi.
+  provinces String[] @default([])
+  /// Rỗng = mọi cấp
+  levels    String[] @default([])
+  /// VND/tháng. Tin không công khai lương vẫn hiện nếu includeNoSalary = true.
+  salaryMin Int?
+  includeNoSalary Boolean @default(true)
+  /// Chỉ lấy tin đăng trong N ngày gần đây
+  maxAgeDays Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THỐNG KÊ
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Bảng tổng hợp — nguồn của mọi biểu đồ. Tính lại theo lô, KHÔNG tính lúc
+/// người dùng truy cập. Tính bằng GitHub Actions chứ không phải pg_cron:
+/// pg_cron trên Neon chỉ chạy khi compute thức, gói Free ngủ sau vài phút
+/// và job sẽ im lặng không chạy. TECHSTACK.md §5.
+model SalaryStat {
+  id         Int      @id @default(autoincrement())
+  statDate   DateTime
+  /// "skill" | "level" | "province" | "field" | "skill+level"
+  dimension  String
+  /// "react" | "senior" | "ha-noi" | "co-khi"
+  dimKey     String
+  /// Số tin CÓ lương công khai đưa vào tính
+  sampleSize Int
+  p25        Int
+  median     Int
+  p75        Int
+  /// Tỷ lệ tin dám ghi số thay vì "Thoả thuận" — chỉ số này tự nó đã là một
+  /// phát hiện, không sàn nào công bố.
+  disclosureRate Float
+  /// Tổng số tin trong nhóm (kể cả tin không ghi lương)
+  totalPostings  Int
+
+  @@unique([statDate, dimension, dimKey])
+  @@index([dimension, dimKey, statDate])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VẬN HÀNH
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Nhật ký mỗi lần chạy. Không có bảng này thì không biết crawler chết lúc nào.
+model CrawlRun {
+  id         Int       @id @default(autoincrement())
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  /// "cron" | "manual" | "backfill" | "reparse" | "recheck"
+  trigger    String
+  /// RUNNING | SUCCESS | PARTIAL | FAILED | ABORTED
+  status     String    @default("RUNNING")
+  errorLog   String?
+
+  urlsDiscovered Int @default(0)
+  pagesFetched   Int @default(0)
+  pagesNotModified Int @default(0)
+  postingsNew    Int @default(0)
+  postingsUpdated Int @default(0)
+  postingsFailed Int @default(0)
+  postingsClosed Int @default(0)
+
+  sources CrawlRunSource[]
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+/// Kết quả của MỘT nguồn trong MỘT lần chạy. Tách ra để một nguồn hỏng không
+/// làm mờ bức tranh của các nguồn còn lại.
+model CrawlRunSource {
+  id       Int      @id @default(autoincrement())
+  runId    Int
+  run      CrawlRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  sourceId Int
+  source   Source   @relation(fields: [sourceId], references: [id])
+
+  status         String  @default("RUNNING")
+  urlsDiscovered Int     @default(0)
+  pagesFetched   Int     @default(0)
+  postingsNew    Int     @default(0)
+  postingsUpdated Int    @default(0)
+  postingsFailed Int     @default(0)
+  errorLog       String?
+
+  @@unique([runId, sourceId])
+}
