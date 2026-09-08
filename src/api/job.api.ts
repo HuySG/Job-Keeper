@@ -5,14 +5,18 @@ import type { Prisma } from '@prisma/client';
 import { db } from '@/api/db';
 import { toMatchKey } from '@/crawler/normalize/text';
 import { JobStatus } from '@/enums';
+import { readFlag, readNumber, readParam, type SearchParams } from '@/lib/query';
 
 /**
- * Truy vấn tin cho phần web. Web **chỉ đọc** — mọi thứ ghi vào DB đều đi qua
+ * Truy vấn tin cho phần web. Web **chỉ đọc** — mọi thứ ghi vào CSDL đều đi qua
  * crawler. Không có đường nào từ lượt truy cập của người dùng đi ra sàn nguồn,
  * nên trang vẫn chạy bình thường kể cả khi cả bốn nguồn cùng sập.
  */
 
 export const PAGE_SIZE = 20;
+
+/** Tin còn sống. Dùng chung với `stats.api.ts` — hai chỗ phải cùng một định nghĩa. */
+const ALIVE: string[] = [JobStatus.OPEN, JobStatus.STALE];
 
 export interface JobFilters {
   q?: string;
@@ -25,7 +29,7 @@ export interface JobFilters {
   salaryOnly?: boolean;
   /** Chỉ tin đăng trong N ngày gần đây */
   days?: number;
-  /** true = hiện cả tin đã hết hạn/đóng */
+  /** true = hiện cả tin đã hết hạn/đã gỡ */
   includeDead?: boolean;
   sort?: SortKey;
   page?: number;
@@ -34,10 +38,37 @@ export interface JobFilters {
 export type SortKey = 'moi' | 'luong' | 'han';
 
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'moi', label: 'Mới đăng trước' },
-  { value: 'luong', label: 'Lương cao trước' },
-  { value: 'han', label: 'Sắp hết hạn trước' },
+  { value: 'moi', label: 'Mới đăng' },
+  { value: 'luong', label: 'Lương cao' },
+  { value: 'han', label: 'Sắp hết hạn' },
 ];
+
+const SORT_KEYS = new Set<string>(SORT_OPTIONS.map((option) => option.value));
+
+/**
+ * URL -> bộ lọc. **Chỗ duy nhất** biết tên tham số trên thanh địa chỉ.
+ *
+ * Bản trước đọc tay từng tham số ngay trong `page.tsx`, kể cả `Number(...)` cho
+ * `salaryMin` và `page`. Hệ quả: `?page=abc` biến thành `NaN`, chui thẳng vào
+ * `skip: NaN` của Prisma và làm cả trang đổ vỡ. Ở đây mọi thứ đi qua
+ * `readNumber`, thứ gì không phải số thì rơi về mặc định.
+ */
+export function parseJobFilters(params: SearchParams): JobFilters {
+  const sort = readParam(params, 'sort');
+
+  return {
+    q: readParam(params, 'q'),
+    province: readParam(params, 'province'),
+    level: readParam(params, 'level'),
+    source: readParam(params, 'source'),
+    salaryMin: readNumber(params, 'salaryMin'),
+    salaryOnly: readFlag(params, 'salaryOnly'),
+    days: readNumber(params, 'days'),
+    includeDead: readFlag(params, 'includeDead'),
+    sort: sort && SORT_KEYS.has(sort) ? (sort as SortKey) : 'moi',
+    page: readNumber(params, 'page'),
+  };
+}
 
 function buildOrderBy(sort: SortKey = 'moi'): Prisma.JobPostingOrderByWithRelationInput[] {
   switch (sort) {
@@ -61,7 +92,7 @@ function buildWhere(filters: JobFilters): Prisma.JobPostingWhereInput {
   if (!filters.includeDead) {
     // Mặc định chỉ tin còn sống. Đây là điểm khác biệt so với việc tự tìm trên
     // các sàn — ở đó tin hết hạn vẫn nằm đầy trong kết quả.
-    where.status = { in: [JobStatus.OPEN, JobStatus.STALE] };
+    where.status = { in: ALIVE };
   }
 
   if (filters.q?.trim()) {
@@ -103,46 +134,85 @@ function buildWhere(filters: JobFilters): Prisma.JobPostingWhereInput {
   return where;
 }
 
-export async function findJobs(filters: JobFilters) {
-  const page = Math.max(1, filters.page ?? 1);
-  const where = buildWhere(filters);
+/** Quan hệ cần kèm theo cho mỗi thẻ tin. Khai một chỗ để mọi nơi lấy đúng một hình dạng. */
+export const LIST_INCLUDE = {
+  company: { select: { name: true, logoUrl: true } },
+  source: { select: { code: true, name: true } },
+  locations: { include: { location: { select: { name: true, slug: true } } } },
+} satisfies Prisma.JobPostingInclude;
 
-  const [items, total] = await Promise.all([
-    db.jobPosting.findMany({
-      where,
-      orderBy: buildOrderBy(filters.sort),
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        company: { select: { name: true, logoUrl: true } },
-        source: { select: { code: true, name: true } },
-        locations: { include: { location: { select: { name: true, slug: true } } } },
-      },
-    }),
-    db.jobPosting.count({ where }),
-  ]);
+export type JobListItem = Prisma.JobPostingGetPayload<{ include: typeof LIST_INCLUDE }>;
 
-  return { items, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+export interface JobPage {
+  items: JobListItem[];
+  total: number;
+  page: number;
+  pageCount: number;
 }
 
-export async function getJob(id: number) {
-  return db.jobPosting.findUnique({
-    where: { id },
-    include: {
-      company: true,
-      source: true,
-      locations: { include: { location: true } },
-    },
+export async function findJobs(filters: JobFilters): Promise<JobPage> {
+  const where = buildWhere(filters);
+  const requested = Math.max(1, Math.trunc(filters.page ?? 1));
+
+  const total = await db.jobPosting.count({ where });
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Chặn trang vượt quá cuối danh sách. `?page=999` mà không chặn thì ra một
+  // trang rỗng không nói được vì sao — trông y hệt "bộ lọc không khớp gì".
+  const page = Math.min(requested, pageCount);
+
+  const items = await db.jobPosting.findMany({
+    where,
+    orderBy: buildOrderBy(filters.sort),
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+    include: LIST_INCLUDE,
+  });
+
+  return { items, total, page, pageCount };
+}
+
+/** Tin mới nhất cho trang tổng quan. Luôn là tin còn sống. */
+export async function getRecentJobs(limit = 6): Promise<JobListItem[]> {
+  return db.jobPosting.findMany({
+    where: { status: { in: ALIVE } },
+    orderBy: { postedAt: 'desc' },
+    take: Math.max(1, Math.min(20, Math.trunc(limit))),
+    include: LIST_INCLUDE,
   });
 }
 
+const DETAIL_INCLUDE = {
+  company: true,
+  source: true,
+  locations: { include: { location: true } },
+} satisfies Prisma.JobPostingInclude;
+
+export type JobDetail = Prisma.JobPostingGetPayload<{ include: typeof DETAIL_INCLUDE }>;
+
+export async function getJob(id: number): Promise<JobDetail | null> {
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return db.jobPosting.findUnique({ where: { id }, include: DETAIL_INCLUDE });
+}
+
+export interface FilterOptions {
+  provinces: { id: number; name: string; slug: string; count: number }[];
+  levels: { value: string; count: number }[];
+  sources: { code: string; name: string }[];
+  total: number;
+  withSalary: number;
+}
+
 /** Dữ liệu cho các ô lọc. Chỉ đếm trên tin còn sống để không hiện lựa chọn rỗng. */
-export async function getFilterOptions() {
-  const alive = { status: { in: [JobStatus.OPEN, JobStatus.STALE] } };
+export async function getFilterOptions(): Promise<FilterOptions> {
+  const alive = { status: { in: ALIVE } };
 
   const [provinces, levels, sources, total, withSalary] = await Promise.all([
     db.jobLocation.groupBy({
       by: ['locationId'],
+      // Lọc theo trạng thái của TIN, không chỉ gom nhóm suông. Thiếu điều kiện
+      // này thì ô lọc ghi "Hà Nội (80)" trong khi danh sách chỉ ra 71 tin —
+      // con số trong ngoặc đếm cả tin đã hết hạn.
+      where: { posting: alive },
       _count: true,
       orderBy: { _count: { locationId: 'desc' } },
       take: 20,
@@ -162,34 +232,16 @@ export async function getFilterOptions() {
     where: { id: { in: provinces.map((p) => p.locationId) } },
     select: { id: true, name: true, slug: true },
   });
+  const byId = new Map(locationRows.map((row) => [row.id, row]));
 
   return {
-    provinces: provinces
-      .map((p) => {
-        const location = locationRows.find((l) => l.id === p.locationId);
-        return location ? { ...location, count: p._count } : null;
-      })
-      .filter((p): p is { id: number; name: string; slug: string; count: number } => p !== null),
-    levels: levels
-      .filter((l) => l.level !== null)
-      .map((l) => ({ value: l.level!, count: l._count })),
+    provinces: provinces.flatMap((row) => {
+      const location = byId.get(row.locationId);
+      return location ? [{ ...location, count: row._count }] : [];
+    }),
+    levels: levels.flatMap((row) => (row.level ? [{ value: row.level, count: row._count }] : [])),
     sources,
     total,
     withSalary,
   };
-}
-
-/**
- * Số liệu cho header — trả lời đúng một câu: **"dữ liệu này có đáng tin không"**.
- *
- * Đếm tin CÒN HIỆU LỰC chứ không đếm tổng số dòng trong bảng: khoe "5.000 tin"
- * trong khi một nửa đã hết hạn là tự nói dối mình.
- */
-export async function getFreshness() {
-  const [totalAlive, sourceCount, newest] = await Promise.all([
-    db.jobPosting.count({ where: { status: { in: [JobStatus.OPEN, JobStatus.STALE] } } }),
-    db.source.count({ where: { isActive: true } }),
-    db.jobPosting.findFirst({ orderBy: { crawledAt: 'desc' }, select: { crawledAt: true } }),
-  ]);
-  return { totalAlive, sourceCount, lastCrawledAt: newest?.crawledAt ?? null };
 }

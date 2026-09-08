@@ -1,0 +1,20 @@
+# Những thứ KHÔNG cần đẩy lên Vercel.
+#
+# Chỉ có MỘT thứ thật sự đáng loại: .blobs — hiện 9,6 MB / 2.193 file và còn
+# phình theo mỗi lần cào. Nó chỉ phục vụ `npm run reparse` ở máy local, web
+# không đọc tới một byte nào.
+#
+# CỐ Ý KHÔNG loại `scripts/`, `tests/`, `prisma/` dù chúng không chạy trên
+# Vercel: `tsconfig.json` include cả ba thư mục đó, và `prisma/seed.ts` import
+# `../scripts/_env`. Loại `scripts/` ra thì bước kiểm kiểu lúc build sẽ đứt với
+# "Cannot find module '../scripts/_env'" — build đỏ vì một thứ chẳng liên quan
+# gì tới trang web. Vài trăm KB mã nguồn không đáng để đổi lấy rủi ro đó.
+#
+# File này chỉ có tác dụng khi deploy bằng CLI từ thư mục local. Deploy qua Git
+# thì .gitignore đã lo (nó cũng đã bỏ .blobs/).
+.blobs/
+
+.next/
+*.tsbuildinfo
+.env
+.env.local

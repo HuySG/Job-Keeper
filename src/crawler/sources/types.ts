@@ -89,4 +89,29 @@ export interface GenericJsonLdConfig {
   skillsSelector?: string;
   /** Bỏ qua URL khớp các mẫu này (trang chuyên mục lẫn vào sitemap job). */
   excludePatterns?: string[];
+
+  /**
+   * NHẮM MỤC TIÊU: chỉ lấy URL khớp thêm mẫu này, **cộng dồn (AND)** với
+   * `jobUrlPattern`. Khác `excludePatterns` ở chỗ nó lọc TRƯỚC khi tiêu ngân
+   * sách `maxUrls`, nên dùng để cắt một lát mỏng của sàn mà không tải phần còn lại.
+   *
+   * Đo thật trên vieclam24h 08/09/2026: URL tin của họ tự khai ngành và tỉnh
+   * (`...-c14p122id200731476.html` → c14 = thu mua/kho vận, p122 = TP.HCM).
+   * Lọc ở đây: 4.180 URL → 69. Tiết kiệm ~98% request, 0 rò rỉ ngoài HCM.
+   *
+   * ⚠️ Bật cờ này là nguồn KHÔNG còn được quét đầy đủ nữa, nên pipeline sẽ thu
+   *    hẹp bước đóng tin vắng mặt theo đúng mẫu này — xem `reapMissing`.
+   */
+  urlIncludePattern?: string;
+
+  /**
+   * Bỏ qua `lastmod` của sitemap khi tính crawl tăng dần.
+   *
+   * Cần cho nguồn ghi `lastmod` = giờ SINH FILE chứ không phải giờ tin đổi.
+   * Đo thật trên `vieclam24h/tintuyendung-0.xml` 08/09/2026: cả 4.180 URL đều
+   * mang đúng một giá trị `2026-07-28T00:13:4x`, và file tên "daily" đó đã
+   * không sinh lại suốt 6 tuần. Không có cờ này thì từ lần chạy thứ hai trở đi
+   * mọi URL đều bị coi là "cũ hơn mốc" và nguồn im lặng trả về 0 tin.
+   */
+  ignoreLastmod?: boolean;
 }

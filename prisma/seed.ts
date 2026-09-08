@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { db } from '@/api/db';
+import { FIELD_SEEDS } from '@/constants/field';
 import { SOURCE_SEEDS } from '@/constants/source';
 import { PROVINCES, REMOTE_SLUG } from '@/crawler/normalize/location';
 import { toMatchKey } from '@/crawler/normalize/text';
@@ -86,7 +87,32 @@ async function main(): Promise<void> {
   });
 
   console.log(`✓ ${PROVINCES.length} tỉnh/thành + 1 mục "làm từ xa", ${aliasCount} bí danh`);
-  console.log('\nTiếp theo: npm run crawl -- --source vnw --limit 50');
+
+  // ── Ngành đã định nghĩa ────────────────────────────────────────────────────
+  // Ghi đè mỗi lần seed là CÓ CHỦ Ý ở đây (khác với Source.isActive): từ điển
+  // ngành nằm trong mã nguồn để đọc và bàn được, còn muốn thử nhanh một biến
+  // thể thì UPDATE thẳng vào DB — chỉ cần biết lần seed sau nó quay về bản gốc.
+  for (const seed of FIELD_SEEDS) {
+    const data = {
+      name: seed.name,
+      keywords: [...seed.keywords],
+      excludes: [...seed.excludes],
+      provinces: [...seed.provinces],
+      includeNoSalary: seed.includeNoSalary,
+      maxAgeDays: seed.maxAgeDays,
+    };
+    await db.savedFilter.upsert({
+      where: { slug: seed.slug },
+      update: data,
+      create: { slug: seed.slug, ...data },
+    });
+    console.log(
+      `✓ ngành "${seed.slug}": ${seed.keywords.length} từ nhận, ` +
+        `${seed.excludes.length} từ loại, tỉnh ${seed.provinces.join(', ') || 'mọi nơi'}`,
+    );
+  }
+
+  console.log('\nTiếp theo: npm run crawl -- --source vnw --full --limit 400');
 }
 
 main()

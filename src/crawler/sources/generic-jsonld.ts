@@ -41,13 +41,23 @@ export const genericJsonLdAdapter: SourceAdapter = {
     const jobUrlPattern = source.jobUrlPattern ? new RegExp(source.jobUrlPattern) : undefined;
     const exclude = (config.excludePatterns ?? []).map((p) => new RegExp(p));
 
+    // Nguồn ghi lastmod rác thì crawl tăng dần không những vô dụng mà còn nguy
+    // hiểm: nó làm nguồn im lặng trả 0 tin. Xem `ignoreLastmod` ở types.ts.
+    const modifiedSince = config.ignoreLastmod ? null : ctx.modifiedSince;
+    if (config.ignoreLastmod && ctx.modifiedSince) {
+      log('bỏ qua lastmod của nguồn này (ignoreLastmod) — quét lại toàn bộ lát cắt');
+    }
+
     log(`đọc sitemap ${source.entryUrl}`);
     const walk = await walkSitemap(fetcher, source.entryUrl, {
       jobUrlPattern,
       ...(config.sitemapUrlPattern
         ? { sitemapUrlPattern: new RegExp(config.sitemapUrlPattern) }
         : {}),
-      modifiedSince: ctx.modifiedSince,
+      ...(config.urlIncludePattern
+        ? { urlIncludePattern: new RegExp(config.urlIncludePattern) }
+        : {}),
+      modifiedSince,
       maxSitemaps: ctx.limits.maxSitemaps,
       maxUrls: ctx.limits.maxDetailPages * 3,
     });

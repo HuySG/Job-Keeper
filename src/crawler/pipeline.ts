@@ -10,8 +10,11 @@ import {
   JobStatus,
   ParseStatus,
   RunStatus,
+  // Dùng làm GIÁ TRỊ (SourceKind.API) chứ không chỉ làm kiểu, nên không được
+  // để `type` ở đây — enum của dự án là object + as const, import kiểu thì
+  // biến mất lúc chạy.
+  SourceKind,
   StatusReason,
-  type SourceKind,
 } from '@/enums';
 
 import { HostAbortedError, PoliteFetcher } from './fetcher';
@@ -245,7 +248,24 @@ async function crawlOneSource(args: CrawlSourceArgs): Promise<CrawlSummary['bySo
     // sổ cả kho dữ liệu chỉ vì một lần chạy nhanh.
     sweptFully = full;
     if (sweptFully && !dryRun && seen.size > 0) {
-      result.closed = await reapMissing(source.id, seen);
+      const targeting = readTargeting(source);
+
+      if (targeting.mode === 'query') {
+        // Nguồn đang bị thu hẹp bằng từ khoá, và KHÔNG có cách nào từ dữ liệu
+        // đã lưu suy ra tin cũ nào lẽ ra phải nằm trong lát cắt đó. Đóng tin
+        // theo tập `seen` ở đây là đóng sạch mọi tin không thuộc từ khoá —
+        // sai lặng lẽ, không exit khác 0, và mất luôn cả kho.
+        log(
+          'BỎ QUA bước đóng tin vắng mặt: nguồn đang nhắm mục tiêu bằng từ khoá ' +
+            '(config.queries), tập quét không phải toàn bộ danh mục. ' +
+            'Tin hết hạn ở nguồn này do tầng 1 (validThrough/isActive) và `npm run recheck` lo.',
+        );
+      } else {
+        result.closed = await reapMissing(source.id, seen, targeting.pattern);
+        if (targeting.pattern) {
+          log(`chỉ đối chiếu tin vắng mặt trong lát cắt /${targeting.pattern.source}/`);
+        }
+      }
     }
 
     result.status = result.failed > 0 ? RunStatus.PARTIAL : RunStatus.SUCCESS;
@@ -310,16 +330,54 @@ async function lastSuccessfulRun(sourceId: number): Promise<Date | null> {
 }
 
 /**
+ * Nguồn này có đang bị THU HẸP không, và thu hẹp bằng cách nào?
+ *
+ * Câu hỏi nghe có vẻ phụ nhưng nó quyết định `reapMissing` được phép làm gì.
+ * "Tin không xuất hiện trong lượt quét" chỉ có nghĩa là "tin đã bị gỡ" khi
+ * lượt quét đó ĐI HẾT danh mục. Quét một lát cắt rồi kết luận như quét toàn bộ
+ * là xoá sổ mọi tin nằm ngoài lát cắt.
+ */
+function readTargeting(
+  source: SourceConfig,
+): { mode: 'none' | 'url' | 'query'; pattern?: RegExp } {
+  const config = (source.config ?? {}) as {
+    queries?: string[];
+    urlIncludePattern?: string;
+  };
+
+  // Từ khoá là kiểu thu hẹp KHÔNG suy ngược được: từ một tin đã lưu trong DB
+  // không có cách nào biết nó có thuộc kết quả của từ khoá đó hay không.
+  if (config.queries?.length) return { mode: 'query' };
+
+  // Còn thu hẹp theo URL thì suy ngược được — chính URL của tin đã lưu trả lời
+  // được câu "tin này có nằm trong lát cắt không", nên tầng 2 vẫn dùng được,
+  // chỉ là thu hẹp phạm vi đối chiếu lại cho đúng.
+  if (config.urlIncludePattern) {
+    return { mode: 'url', pattern: new RegExp(config.urlIncludePattern) };
+  }
+
+  return { mode: 'none' };
+}
+
+/**
  * Tầng 2 của máy kiểm còn-sống: tin nào không xuất hiện trong lượt quét đầy đủ
  * thì missCount tăng. Gần như miễn phí — đằng nào cũng phải đọc sitemap.
+ *
+ * `scope` thu hẹp phạm vi đối chiếu về đúng lát cắt vừa quét. Không có nó thì
+ * một lượt quét có nhắm mục tiêu sẽ đóng cả những tin nó chưa từng nhìn tới.
  */
-async function reapMissing(sourceId: number, seen: Set<string>): Promise<number> {
+async function reapMissing(
+  sourceId: number,
+  seen: Set<string>,
+  scope?: RegExp,
+): Promise<number> {
   const alive = await db.jobPosting.findMany({
     where: { sourceId, status: { in: [JobStatus.OPEN, JobStatus.STALE] } },
-    select: { id: true, externalId: true, missCount: true },
+    select: { id: true, externalId: true, missCount: true, url: true },
   });
 
-  const missing = alive.filter((posting) => !seen.has(posting.externalId));
+  const inScope = scope ? alive.filter((posting) => scope.test(posting.url)) : alive;
+  const missing = inScope.filter((posting) => !seen.has(posting.externalId));
   let closed = 0;
 
   for (const posting of missing) {
@@ -393,6 +451,14 @@ async function upsertJob(
     postedAt: job.postedAt,
     expiresAt: job.expiresAt,
     lastSeenAt: now,
+    // Với nguồn API, chính lượt gọi vừa rồi LÀ một lần kiểm còn-sống: bản ghi
+    // mang isActive/isOnline/expiredOn do sàn tự khai, chính xác hơn mọi thứ
+    // đọc được từ HTML. Không ghi mốc này thì tin VietnamWorks vĩnh viễn hiện
+    // là "chưa từng kiểm", và máy kiểm sẽ đi dò lại một trang HTML rỗng.
+    //
+    // Nguồn sitemap thì KHÔNG được ghi: thấy URL trong sitemap không phải là
+    // kiểm — bằng chứng là vieclam24h vẫn liệt kê những tin đã hết hạn.
+    ...(source.kind === SourceKind.API ? { lastCheckedAt: now } : {}),
     missCount: 0,
     parseStatus: job.salary.outOfRange ? ParseStatus.PARTIAL : job.parseStatus,
     parseError: job.parseError,

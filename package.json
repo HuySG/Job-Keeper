@@ -9,6 +9,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "crawl": "tsx scripts/crawl.ts",
+    "match": "tsx scripts/match.ts",
+    "recheck": "tsx scripts/recheck.ts",
     "reparse": "tsx scripts/reparse.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",

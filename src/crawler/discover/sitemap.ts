@@ -41,6 +41,15 @@ export interface SitemapWalkOptions {
    * thống kê bị đếm đôi.
    */
   sitemapUrlPattern?: RegExp;
+  /**
+   * Lọc thêm, CỘNG DỒN với `jobUrlPattern`: URL phải khớp cả hai mới được lấy.
+   *
+   * Tách khỏi `jobUrlPattern` vì hai thứ này trả lời hai câu khác nhau:
+   * `jobUrlPattern` hỏi "đây có phải trang tin không", còn cái này hỏi "tin này
+   * có thuộc lát cắt tôi đang nhắm không". Trộn làm một là mất khả năng nhận ra
+   * nguồn đang bị thu hẹp — thứ mà `reapMissing` bắt buộc phải biết.
+   */
+  urlIncludePattern?: RegExp;
   /** Bỏ qua URL có lastmod cũ hơn mốc này. Đây là cơ chế crawl tăng dần. */
   modifiedSince?: Date | null;
   /** Trần số file sitemap đọc, để không vô tình quét cả sàn. */
@@ -137,6 +146,7 @@ export async function walkSitemap(
   const {
     jobUrlPattern,
     sitemapUrlPattern,
+    urlIncludePattern,
     modifiedSince = null,
     maxSitemaps = MAX_SITEMAP_PAGES_PER_SOURCE,
     maxDepth = MAX_SITEMAP_DEPTH,
@@ -203,6 +213,9 @@ export async function walkSitemap(
         break;
       }
       if (jobUrlPattern && !jobUrlPattern.test(entry.url)) continue;
+      // Lọc nhắm mục tiêu chạy TRƯỚC khi tính vào `maxUrls`: mục đích của nó là
+      // để ngân sách chỉ tiêu vào lát cắt đang nhắm.
+      if (urlIncludePattern && !urlIncludePattern.test(entry.url)) continue;
       if (modifiedSince && entry.lastModified && entry.lastModified < modifiedSince) continue;
 
       let canonical: string;

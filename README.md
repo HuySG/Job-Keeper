@@ -6,7 +6,7 @@ theo **ngành nghề do người dùng tự định nghĩa**.
 Thiết kế và toàn bộ căn cứ nằm ở [PLAN.md](PLAN.md) và [TECHSTACK.md](TECHSTACK.md).
 README này chỉ nói cách chạy.
 
-> **Trạng thái: lõi crawler đã xong, chưa có giao diện web.**
+> **Trạng thái: lõi crawler đã xong, bảng điều khiển web đã chạy.**
 > Chặng 0–2 theo [TECHSTACK.md §9](TECHSTACK.md). Xem [§ Đã có gì](#đã-có-gì).
 
 ---
@@ -57,6 +57,66 @@ npm run crawl -- --source vnw --limit 200
 
 ---
 
+## Bảng điều khiển web
+
+```bash
+npm run dev        # http://localhost:3000
+```
+
+Bốn màn hình, mỗi màn hình trả lời **đúng một câu hỏi**. Đó là phép thử để nó
+không phình ra: thêm một trang mà không viết nổi câu hỏi nó trả lời, hoặc câu
+hỏi trùng với trang đã có, thì đó là một khối trong trang cũ chứ không phải một
+trang mới.
+
+| Đường dẫn | Trả lời câu |
+|---|---|
+| `/` **Tổng quan** | Kho tin đang có gì, và có đáng tin không? |
+| `/viec` **Kho tin** | Tin nào khớp với thứ tôi đang tìm? |
+| `/luong` **Lương** | Mức nào là phổ biến, và bao nhiêu tin dám ghi số? |
+| `/nguon` **Nguồn & vận hành** | Crawler còn sống không, nguồn nào đang hỏng? |
+
+Vì sao trang chủ **không** phải là danh sách việc làm: cào job về rồi hiển thị
+lại danh sách thì TopCV làm tốt hơn và có sẵn nút ứng tuyển. Thứ đáng đặt lên
+trước là thứ **không sàn đơn lẻ nào tính được** — tỷ lệ tin dám ghi lương,
+khoảng lương theo cấp bậc gom từ nhiều sàn, và tình trạng sống chết của chính
+kho tin ([PLAN.md §1](PLAN.md)).
+
+### Ba ràng buộc kỹ thuật của phần web
+
+**1. Chỉ đọc.** Không có đường nào từ lượt truy cập của người dùng đi ra sàn
+nguồn. Mọi thứ ghi vào CSDL đều đi qua crawler, nên trang vẫn chạy bình thường
+kể cả khi cả bốn nguồn cùng sập.
+
+**2. Gần như không có JavaScript.** Mỗi trang chỉ nặng thêm **142 B** JS của
+riêng nó — toàn bộ biểu đồ, bộ lọc, sắp xếp và phân trang đều dựng sẵn trên máy
+chủ. Bộ lọc là `<form method="get">` thuần, nên mỗi trạng thái màn hình là một
+URL dán được và đánh dấu trang được. Component phía trình duyệt duy nhất là
+danh sách điều hướng, vì "tôi đang ở trang nào" thì không thể chờ JS tải xong.
+
+**3. Biểu đồ tự vẽ, không thư viện.** Thêm một thư viện biểu đồ là kéo theo hàng
+trăm KB JS cho vài chục hình chữ nhật, và đánh mất ràng buộc số 2. Phần hình học
+nằm ở [src/lib/chart.ts](src/lib/chart.ts), phần vẽ ở
+[src/components/charts](src/components/charts/).
+
+### Nói thật, không làm đẹp số
+
+Đây là nguyên tắc chi phối gần như mọi lựa chọn hiển thị:
+
+- Đếm tin **còn hiệu lực**, không đếm tổng số dòng trong bảng. Khoe "5.000 tin"
+  trong khi một nửa đã hết hạn là tự nói dối mình.
+- Tin đã hết hạn / bị gỡ vẫn **giữ lại và hiện ra** với nhãn đúng, chỉ không
+  đếm vào thống kê. Bật `Kể cả tin đã gỡ` ở kho tin để xem.
+- Mọi phân vị lương đi kèm **cỡ mẫu**. Nhóm dưới 3 tin ghi lương không được vẽ
+  thành khoảng — một tin lẻ không phải một phân bố; nhóm dưới 8 tin vẫn vẽ
+  nhưng vẽ nhạt.
+- Tin "Thoả thuận" **không bao giờ** bị quy thành 0 đồng. Một số 0 lọt vào là
+  mọi trung vị đều sai, và sai theo hướng không ai phát hiện được.
+- Độ tươi nói bằng con số thật: *thu thập 1 giờ trước*, *còn thấy trong danh mục
+  nguồn 3 giờ trước*. Nguồn không báo cho ta khi họ gỡ tin, nên đó là điều
+  trung thực nhất có thể nói ([TECHSTACK.md §4](TECHSTACK.md)).
+
+---
+
 ## Toàn bộ lệnh
 
 | Lệnh | Việc |
@@ -68,8 +128,10 @@ npm run crawl -- --source vnw --limit 200
 | `npm run crawl -- --dry` | Không ghi DB, chỉ in ra |
 | `npm run reparse` | **Tính lại toàn bộ từ blob đã lưu, không gọi mạng.** `-- --failed --dry` |
 | `npm run db:push` / `db:seed` / `db:studio` | Thao tác CSDL |
-| `npm test` | 101 test, chạy trên fixture JSON-LD **thật** của 3 sàn |
+| `npm test` | 102 test, chạy trên fixture JSON-LD **thật** của 3 sàn |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run dev` | **Bảng điều khiển web** ở http://localhost:3000 |
+| `npm run build` / `npm start` | Bản production |
 
 `npm run reparse` là lệnh quan trọng nhất khi bảo trì: mỗi tin được lưu bản
 JSON-LD gốc trên blob store, nên sửa parser rồi chạy lệnh này là toàn bộ lịch sử
@@ -127,13 +189,27 @@ src/
 │  │  ├─ generic-jsonld.ts  ★ MỘT adapter cho 5 sàn
 │  │  └─ vietnamworks.ts      adapter API riêng
 │  └─ storage/blob.ts       R2 / đĩa — HTML thô KHÔNG BAO GIỜ vào Postgres
-├─ constants/{crawl,source}/  quy tắc lịch sự · 6 nguồn đã khảo sát thật
-├─ enums/                    JobStatus · Level · SourceKind · ...
-└─ api/db.ts
+├─ api/                     ★ tầng đọc CSDL cho web — CHỈ ĐỌC
+│  ├─ job.api.ts            danh sách + chi tiết tin, URL -> bộ lọc
+│  ├─ stats.api.ts          số liệu tổng hợp, phân vị lương (percentile_cont)
+│  └─ ops.api.ts            sức khoẻ nguồn, nhật ký crawl, khả năng reparse
+├─ lib/
+│  ├─ query.ts            ★ đọc/dựng query string — MỘT quy tắc phân trang
+│  └─ chart.ts              hình học biểu đồ: mốc trục đẹp, tỷ lệ, dải phân vị
+├─ components/
+│  ├─ ui/                 ★ mảnh ghép không biết gì về nghiệp vụ
+│  │  └─ tone.ts            ★ CHỖ DUY NHẤT dịch từ ý nghĩa sang màu
+│  ├─ charts/               SVG/CSS tự vẽ, không thư viện
+│  ├─ job/                  thẻ tin · bộ lọc · dải chip đang lọc
+│  └─ layout/               khung ngoài + điều hướng
+├─ app/                     4 màn hình (xem § Bảng điều khiển web)
+├─ styles/globals.css     ★ toàn bộ hệ màu, đã kiểm bằng máy
+├─ constants/{crawl,source,nav}/  quy tắc lịch sự · 6 nguồn · 4 màn hình
+└─ enums/                   JobStatus · Level · SourceKind · ...
 ```
 
-**Chưa có:** giao diện web, máy kiểm còn-sống tầng 3–4 (`recheck`), khử trùng
-lặp `JobGroup`, `SalaryStat`, tìm kiếm vector. Xem lộ trình ở
+**Chưa có:** máy kiểm còn-sống tầng 3–4 (`recheck`), khử trùng lặp `JobGroup`,
+tác vụ ghi `SalaryStat` theo lô, tìm kiếm vector. Xem lộ trình ở
 [TECHSTACK.md §9](TECHSTACK.md).
 
 ---

@@ -72,76 +72,137 @@ const WORKING_TYPE: Record<number, string> = {
   5: 'TEMPORARY',
 };
 
+/** Cấu hình riêng của nguồn này, đọc từ cột `Source.config`. */
+interface VnwConfig {
+  /**
+   * Danh sách truy vấn để NHẮM MỤC TIÊU. Rỗng/không khai = quét tin mới nhất
+   * của cả sàn như trước.
+   *
+   * Đo thật 08/09/2026: `query` là chuỗi tự do và ăn ngay —
+   * "thu mua" trả 407 tin, "purchasing" 1.200, "procurement" 849.
+   *
+   * ⚠️ ĐÃ THỬ VÀ KHÔNG DÙNG ĐƯỢC: lọc địa điểm phía nguồn. Bốn tên trường
+   *    (`workingLocationsCityId`, `cityId`, `locationId`, `cityIds`) đều trả
+   *    `nbHits: 0`, và `value` phải là chuỗi chứ mảng thì HTTP 400. Nên tỉnh
+   *    thành lọc ở phía ta, bằng bảng Location — cách đó còn đúng hơn vì nó
+   *    gộp được tên cũ trước sáp nhập 2025.
+   */
+  queries?: string[];
+}
+
 export const vietnamworksAdapter: SourceAdapter = {
   kind: SourceKind.API,
 
   async *run(ctx: SourceRunContext): AsyncGenerator<CrawlItem, void, undefined> {
-    const { fetcher, blobs, log } = ctx;
+    const { fetcher, log } = ctx;
     const endpoint = ctx.source.entryUrl || SEARCH_ENDPOINT;
+    const config = (ctx.source.config ?? {}) as VnwConfig;
 
-    const maxPages = Math.max(1, Math.ceil(ctx.limits.maxDetailPages / HITS_PER_PAGE));
-    let page = 0;
-    let totalSeen = 0;
+    const queries = (config.queries ?? []).map((q) => q.trim()).filter(Boolean);
+    // Không khai query nào thì giữ nguyên hành vi cũ: một lượt quét rỗng =
+    // tin mới nhất của cả sàn.
+    const plan = queries.length > 0 ? queries : [''];
 
-    while (page < maxPages) {
-      const body = {
-        query: '',
-        filter: [],
-        ranges: [],
-        // Mặc định của nguồn đã là mới nhất trước, nên trang 0 là tin mới nhất.
-        order: [],
-        hitsPerPage: HITS_PER_PAGE,
-        page,
-      };
+    const maxJobs = ctx.limits.maxDetailPages;
+    // Chia đều ngân sách cho từng từ khoá. Không chia thì từ khoá đầu tiên ăn
+    // hết trần và những từ sau không lấy được tin nào — đúng cái làm hỏng mục
+    // đích của việc khai nhiều từ khoá.
+    const perQuery = Math.max(1, Math.ceil(maxJobs / plan.length));
 
-      let response: VnwSearchResponse;
-      try {
-        response = await fetcher.fetchJson<VnwSearchResponse>(endpoint, {
-          method: 'POST',
-          body,
-        });
-      } catch (err) {
-        yield { kind: 'error', url: `${endpoint}#page=${page}`, message: (err as Error).message };
-        return;
-      }
+    /** Khử trùng GIỮA các từ khoá: "thu mua" và "mua hang" chồng nhau rất nhiều. */
+    const seenIds = new Set<string>();
+    let fetched = 0;
 
-      const jobs = response.data ?? [];
-      if (jobs.length === 0) break;
-
-      if (page === 0) {
-        log(`API trả ${response.meta?.nbHits ?? '?'} tin, ${response.meta?.nbPages ?? '?'} trang`);
-      }
-
-      let reachedOld = false;
-      for (const job of jobs) {
-        const externalId = String(job.jobId);
-        yield { kind: 'seen', externalId, url: job.jobUrl };
-        totalSeen += 1;
-
-        // Crawl tăng dần: nguồn sắp theo mới nhất trước, nên gặp tin cũ hơn mốc
-        // là mọi tin sau đó cũng cũ hơn -> dừng, không đọc tiếp trang nào nữa.
-        const updated = parseDate(job.lastUpdatedOn ?? job.approvedOn);
-        if (ctx.modifiedSince && updated && updated < ctx.modifiedSince) {
-          reachedOld = true;
-          break;
-        }
-
-        try {
-          const item = await toCrawlItem(ctx, job, externalId);
-          yield item;
-        } catch (err) {
-          yield { kind: 'error', url: job.jobUrl, message: (err as Error).message };
-        }
-      }
-
-      if (reachedOld) {
-        log(`dừng ở trang ${page}: đã tới tin cũ hơn mốc ${ctx.modifiedSince?.toISOString()}`);
-        break;
-      }
-      page += 1;
+    if (queries.length > 0) {
+      log(`nhắm mục tiêu ${queries.length} từ khoá, mỗi từ tối đa ${perQuery} tin`);
     }
 
-    log(`đã duyệt ${totalSeen} tin`);
+    for (const query of plan) {
+      if (fetched >= maxJobs) break;
+
+      const label = query || '(mọi tin)';
+      const startedAt = fetched;
+      let page = 0;
+      let stop = false;
+
+      while (!stop && fetched < maxJobs && fetched - startedAt < perQuery) {
+        const body = {
+          query,
+          filter: [],
+          ranges: [],
+          // Mặc định của nguồn đã là mới nhất trước, nên trang 0 là tin mới nhất.
+          order: [],
+          hitsPerPage: HITS_PER_PAGE,
+          page,
+        };
+
+        let response: VnwSearchResponse;
+        try {
+          response = await fetcher.fetchJson<VnwSearchResponse>(endpoint, {
+            method: 'POST',
+            body,
+          });
+        } catch (err) {
+          yield {
+            kind: 'error',
+            url: `${endpoint}#q=${encodeURIComponent(query)}&page=${page}`,
+            message: (err as Error).message,
+          };
+          break; // hỏng một từ khoá thì thử từ tiếp theo, không bỏ cả nguồn
+        }
+
+        const jobs = response.data ?? [];
+        if (jobs.length === 0) break;
+
+        if (page === 0) {
+          log(`"${label}": ${response.meta?.nbHits ?? '?'} tin, ${response.meta?.nbPages ?? '?'} trang`);
+        }
+
+        for (const job of jobs) {
+          if (fetched >= maxJobs || fetched - startedAt >= perQuery) {
+            stop = true;
+            break;
+          }
+
+          const externalId = String(job.jobId);
+          if (seenIds.has(externalId)) continue;
+          seenIds.add(externalId);
+
+          yield { kind: 'seen', externalId, url: job.jobUrl };
+
+          const updated = parseDate(job.lastUpdatedOn ?? job.approvedOn);
+          const tooOld = Boolean(ctx.modifiedSince && updated && updated < ctx.modifiedSince);
+          if (tooOld) {
+            // Không có từ khoá: nguồn sắp mới-nhất-trước, nên gặp tin cũ hơn
+            // mốc là mọi tin sau cũng cũ hơn -> dừng luôn, khỏi đọc tiếp.
+            // CÓ từ khoá: thứ tự là theo ĐỘ LIÊN QUAN, không đơn điệu theo
+            // ngày, nên dừng sớm là bỏ sót. Chỉ bỏ qua đúng tin này.
+            if (!query) {
+              log(`"${label}": dừng ở trang ${page} — đã tới tin cũ hơn mốc`);
+              stop = true;
+              break;
+            }
+            yield { kind: 'skipped', url: job.jobUrl, reason: 'cũ hơn mốc crawl tăng dần' };
+            continue;
+          }
+
+          try {
+            yield await toCrawlItem(ctx, job, externalId);
+            fetched += 1;
+          } catch (err) {
+            yield { kind: 'error', url: job.jobUrl, message: (err as Error).message };
+          }
+        }
+
+        page += 1;
+        const totalPages = response.meta?.nbPages ?? 0;
+        if (totalPages > 0 && page >= totalPages) break;
+      }
+
+      if (query) log(`"${label}": lấy ${fetched - startedAt} tin`);
+    }
+
+    log(`đã duyệt ${seenIds.size} tin, lấy ${fetched}`);
   },
 };
 

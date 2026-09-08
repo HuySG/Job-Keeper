@@ -102,15 +102,152 @@ export function workModeLabel(value: string | null): string | null {
   return value ? (WORK_MODE[value] ?? null) : null;
 }
 
-const SOURCES: Record<string, string> = {
-  vnw: 'VietnamWorks',
-  topcv: 'TopCV',
-  topdev: 'TopDev',
-  itviec: 'ITviec',
-  vieclam24h: 'Việc Làm 24h',
-  careerviet: 'CareerViet',
+/* Cố ý KHÔNG có `sourceLabel(code)`: bảng `Source` đã giữ tên hiển thị của
+   từng sàn, nên một bảng tên cài cứng ở đây là nguồn sự thật THỨ HAI. Đổi tên
+   một sàn trong CSDL mà quên sửa ở đây thì hai chỗ nói hai kiểu, và chỗ sai
+   lại là chỗ người dùng nhìn thấy. Mọi nơi dùng `source.name` đọc từ CSDL. */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SỐ LIỆU — dùng chung cho chỉ số, biểu đồ và bảng
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** "1.284". Dấu phân cách theo tiếng Việt là DẤU CHẤM, không phải dấu phẩy. */
+export function formatCount(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—';
+}
+
+/**
+ * Tỷ lệ 0–1 thành "42%".
+ *
+ * `null` khi mẫu rỗng — KHÁC HẲN với 0%. "0% tin ghi lương" là một phát hiện;
+ * "0% vì chưa có tin nào" là chưa biết gì. Hiện nhầm cái sau thành cái trước
+ * là tự bịa ra một kết luận.
+ */
+export function formatPercent(part: number, whole: number, digits = 0): string {
+  if (!Number.isFinite(whole) || whole <= 0) return '—';
+  return `${((part / whole) * 100).toFixed(digits).replace('.', ',')}%`;
+}
+
+/** Số triệu gọn: "15" hoặc "15,5". Dùng cho nhãn trục lương. */
+export function millions(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return trim(value / 1e6);
+}
+
+function trim(value: number): string {
+  return value % 1 === 0 ? String(value) : value.toFixed(1).replace('.', ',');
+}
+
+/** "25/08/2026". */
+export function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const value = typeof date === 'string' ? new Date(date) : date;
+  return value.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/** "25/08 14:30" — dùng trong nhật ký chạy, nơi giờ mới là thứ đáng xem. */
+export function formatDateTime(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const value = typeof date === 'string' ? new Date(date) : date;
+  return value.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** "2 phút 13 giây" — thời lượng một lần chạy crawler. */
+export function formatDuration(from: Date | null, to: Date | null): string {
+  if (!from || !to) return '—';
+  const seconds = Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000));
+  if (seconds < 60) return `${seconds} giây`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} phút ${seconds % 60} giây`;
+  return `${Math.floor(minutes / 60)} giờ ${minutes % 60} phút`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRẠNG THÁI — nhãn + vai trò màu, khai ở MỘT chỗ
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Mỗi trạng thái đi kèm `tone` chứ không đi kèm mã màu: component quyết định
+   vẽ ra sao, còn ở đây chỉ nói "cái này là tốt / cảnh báo / hỏng". Nhờ vậy
+   đổi bảng màu không phải lục lại từng chỗ dùng.
+
+   Và mỗi trạng thái LUÔN có chữ đi kèm màu. Màu vàng cảnh báo trên nền sáng
+   chỉ đạt 1,8:1 — ai không phân biệt được màu, hoặc đang đứng ngoài nắng, thì
+   chữ là thứ duy nhất còn đọc được. */
+
+export type Tone = 'neutral' | 'accent' | 'good' | 'warn' | 'serious' | 'critical';
+
+export interface StatusMeta {
+  label: string;
+  tone: Tone;
+  /** Câu giải thích cho `title=` — nói THẬT vì sao tin ở trạng thái này. */
+  hint: string;
+}
+
+const JOB_STATUS: Record<string, StatusMeta> = {
+  OPEN: {
+    label: 'Còn tuyển',
+    tone: 'good',
+    hint: 'Lần quét gần nhất vẫn thấy tin trong danh mục của nguồn và chưa quá hạn nộp',
+  },
+  STALE: {
+    label: 'Chưa xác nhận lại',
+    tone: 'warn',
+    hint: 'Tin đã vắng khỏi danh mục của nguồn ở lần quét gần nhất — có thể đã bị gỡ',
+  },
+  EXPIRED: {
+    label: 'Hết hạn',
+    tone: 'serious',
+    hint: 'Đã qua hạn nộp mà nguồn khai trong tin',
+  },
+  CLOSED: {
+    label: 'Đã gỡ',
+    tone: 'critical',
+    hint: 'Vắng khỏi danh mục của nguồn từ 3 lần quét liên tiếp trở lên',
+  },
 };
 
-export function sourceLabel(code: string): string {
-  return SOURCES[code] ?? code;
+export function jobStatusMeta(status: string): StatusMeta {
+  return JOB_STATUS[status] ?? { label: status, tone: 'neutral', hint: '' };
+}
+
+const RUN_STATUS: Record<string, StatusMeta> = {
+  RUNNING: { label: 'Đang chạy', tone: 'accent', hint: 'Lần chạy chưa kết thúc' },
+  SUCCESS: { label: 'Xong', tone: 'good', hint: 'Mọi nguồn đều chạy trọn vẹn' },
+  PARTIAL: { label: 'Xong một phần', tone: 'warn', hint: 'Có nguồn hỏng, các nguồn còn lại vẫn xong' },
+  FAILED: { label: 'Hỏng', tone: 'critical', hint: 'Lần chạy kết thúc bằng lỗi' },
+  ABORTED: {
+    label: 'Nguồn chặn',
+    tone: 'serious',
+    hint: 'Nguồn trả 429/503 — đã dừng để không bị chặn vĩnh viễn. Không phải lỗi của ta',
+  },
+};
+
+export function runStatusMeta(status: string): StatusMeta {
+  return RUN_STATUS[status] ?? { label: status, tone: 'neutral', hint: '' };
+}
+
+/**
+ * Kho dữ liệu còn tươi không.
+ *
+ * Ngưỡng lấy đúng theo hợp đồng đã chốt ở TECHSTACK.md §4: `/api/health` trả
+ * 503 khi lô kiểm gần nhất quá 24 giờ. Giao diện phải nói cùng một câu với
+ * máy giám sát, nếu không thì một bên báo động còn một bên vẫn xanh.
+ */
+export function freshnessMeta(lastCrawledAt: Date | null): StatusMeta {
+  if (!lastCrawledAt) {
+    return { label: 'Chưa chạy lần nào', tone: 'critical', hint: 'Kho chưa có lần thu thập nào' };
+  }
+  const hours = (Date.now() - lastCrawledAt.getTime()) / 3_600_000;
+  if (hours <= 6) return { label: 'Mới', tone: 'good', hint: 'Thu thập trong vòng 6 giờ qua' };
+  if (hours <= 24) return { label: 'Chấp nhận được', tone: 'warn', hint: 'Thu thập trong vòng 24 giờ qua' };
+  return {
+    label: 'Đã cũ',
+    tone: 'critical',
+    hint: 'Quá 24 giờ chưa thu thập — đúng ngưỡng mà /api/health báo động',
+  };
 }

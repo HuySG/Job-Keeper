@@ -107,6 +107,17 @@ export const EXPIRY_TEXT_MARKERS: readonly string[] = [
   'job has expired',
   'this job is no longer',
   'no longer available',
+  // Thêm 08/09/2026 sau khi đo trượt một tin thật. vieclam24h
+  // `.../truong-phong-mua-hang-c14p122id200731476.html` trả HTTP 200, khối
+  // JSON-LD JobPosting VẪN CÒN NGUYÊN, `validThrough` đã qua 30 ngày, và câu
+  // báo trong trang là "Việc làm NÀY đã hết hạn nộp hồ sơ" — chữ "này" ở giữa
+  // làm mọi mẫu bên trên trượt hết. Bài học: khớp cụm ngắn, đừng khớp cả câu.
+  'hết hạn nộp hồ sơ',
+  'ngừng nhận hồ sơ',
+  'đã đóng tuyển dụng',
+  'tuyển dụng đã đóng',
+  'position has been filled',
+  'applications are closed',
 ];
 
 // ─── Ngưỡng dữ liệu ──────────────────────────────────────────────────────────

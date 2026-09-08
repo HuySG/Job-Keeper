@@ -36,7 +36,36 @@ export const SOURCE_SEEDS: readonly SourceSeed[] = [
     entryUrl: 'https://ms.vietnamworks.com/job-search/v1.0/search',
     jobUrlPattern: null,
     priority: 10,
-    config: null,
+    // NHẮM MỤC TIÊU ngành thu mua. Đo thật 08/09/2026, số tin mỗi từ khoá trả về:
+    //   mua hang 1.258 · purchasing 1.200 · procurement 849 · cung ung 474
+    //   thu mua 407 · sourcing 351 · merchandiser 112
+    // Một từ khoá bắt được chưa tới một phần ba nghề, nên phải đi cả cụm.
+    // Đây là ĐỘ PHỦ thô, còn ĐỘ CHÍNH XÁC do từ điển trong SavedFilter lo —
+    // "mua hang" nuốt cả "tư vấn mua hàng" (sales) lẫn "kế toán mua hàng".
+    // Muốn đổi ngành: UPDATE cột config, không phải sửa code.
+    config: {
+      // KHÔNG dò HTTP vào trang tin của nguồn này — đo thật 08/09/2026:
+      //   tin ĐANG tuyển  (2098170): HTTP 200, 67 KB
+      //   tin ĐÃ hết hạn  (2071986, expiredOn 26/08): HTTP 200, 23 KB
+      // Trang hết hạn KHÔNG có JSON-LD, KHÔNG có <title>, KHÔNG một chữ nào
+      // báo hết hạn — chỉ là vỏ JS rỗng. Dò vào đây thì mọi kết quả đều là
+      // "còn sống", tức là tự dối mình và còn tốn request để làm việc đó.
+      // Nguồn này tự khai isActive/isOnline/expiredOn trong API, nên tầng 1 đã
+      // đủ và chính xác hơn mọi thứ đọc được từ HTML.
+      livenessProbe: 'none',
+      queries: [
+        'thu mua',
+        'mua hang',
+        'mua sam',
+        'vat tu',
+        'purchasing',
+        'procurement',
+        'sourcing',
+        'merchandiser',
+        'dau thau',
+        'cung ung',
+      ],
+    },
     isActive: true,
     note:
       'ĐÃ CHẠY THẬT 25/08: 1 request -> 50 tin đầy đủ. API JSON công khai, không ' +
@@ -136,12 +165,40 @@ export const SOURCE_SEEDS: readonly SourceSeed[] = [
     priority: 40,
     config: {
       externalIdPattern: 'id(\\d+)',
+      // NHẮM MỤC TIÊU: thu mua + TP.HCM, lọc ngay ở tầng sitemap.
+      //
+      // URL tin của sàn này tự khai ngành và tỉnh:
+      //   .../truong-phong-mua-hang-c14p122id200731476.html
+      //        c14 = Thu mua–Kho vận–Chuỗi cung ứng · p122 = TP.HCM
+      //
+      // Hai nhánh, và nhánh thứ hai mới là chỗ đáng tiền. Đo trên
+      // tintuyendung-0.xml (4.180 URL) ngày 08/09/2026:
+      //   chỉ c14p122            -> 50 URL
+      //   c14p122 + slug nghề    -> 69 URL  (+38%), 0 rò rỉ ngoài p122
+      // 19 tin vớt thêm là tin thu mua bị sàn xếp vào danh mục KHÁC —
+      // "nhan-vien-thu-mua-c31p122id...", "chuyen-vien-mua-hang-quoc-te-c15p122id...".
+      // Chỉ tin vào c14 là mất đứt số đó.
+      //
+      // `[a-z0-9-]*` cố ý KHÔNG chứa "/" nên nhánh slug không thể trèo qua dấu
+      // gạch chéo để khớp nhầm tên danh mục ở đoạn đường dẫn trước đó.
+      urlIncludePattern:
+        '(?:c14p122id\\d+|(?:thu-mua|mua-hang|mua-sam|vat-tu|cung-ung|dau-thau|purchasing|procurement|purchaser|merchandiser|sourcing|buyer)[a-z0-9-]*-c\\d+p122id\\d+)',
+      // BẮT BUỘC ở nguồn này — xem note.
+      ignoreLastmod: true,
     },
     isActive: true,
     note:
       'ĐO 25/08: job-0.xml là index -> job/tintuyendung-N.xml. Sitemap gốc có ' +
       '<lastmod> và chia sẵn theo nganhnghe-*.xml / tinhthanh-*.xml — đúng chiều ' +
-      'cắt cần cho thống kê theo ngành, để dành cho chặng thống kê.',
+      'cắt cần cho thống kê theo ngành, để dành cho chặng thống kê. ' +
+      'ĐO LẠI 08/09: <lastmod> của nguồn này là RÁC — cả 4.180 URL trong ' +
+      'tintuyendung-0.xml mang đúng một giá trị 2026-07-28T00:13:4x, tức giờ ' +
+      'SINH FILE chứ không phải giờ tin đổi; file tên "daily" mà 6 tuần chưa ' +
+      'sinh lại. Hệ quả: không bật ignoreLastmod thì từ lần chạy thứ hai nguồn ' +
+      'im lặng trả 0 tin. Và vì sitemap đóng băng nên TẦNG 2 (vắng khỏi sitemap) ' +
+      'ở đây VÔ GIÁ TRỊ — bằng chứng: tin c14p122id200731476 vẫn nằm trong ' +
+      'sitemap, vẫn trả HTTP 200, vẫn còn JSON-LD, nhưng validThrough 2026-08-09 ' +
+      'đã qua và trang ghi "Việc làm này đã hết hạn nộp hồ sơ". Tin cậy tầng 1 + 4.',
   },
   {
     code: 'careerviet',
