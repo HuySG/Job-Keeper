@@ -89,9 +89,18 @@ async function main(): Promise<void> {
   console.log(`✓ ${PROVINCES.length} tỉnh/thành + 1 mục "làm từ xa", ${aliasCount} bí danh`);
 
   // ── Ngành đã định nghĩa ────────────────────────────────────────────────────
-  // Ghi đè mỗi lần seed là CÓ CHỦ Ý ở đây (khác với Source.isActive): từ điển
-  // ngành nằm trong mã nguồn để đọc và bàn được, còn muốn thử nhanh một biến
-  // thể thì UPDATE thẳng vào DB — chỉ cần biết lần seed sau nó quay về bản gốc.
+  //
+  // CHỈ TẠO MỚI, không ghi đè — trừ khi gọi `--force-fields`.
+  //
+  // Lý do: cả thiết kế dựa trên lời hứa "sửa từ điển bằng một câu UPDATE, không
+  // cần deploy". Mà GitHub Actions chạy seed bốn lần một ngày. Nếu seed ghi đè
+  // thì mọi tinh chỉnh bằng SQL sống được nhiều nhất sáu tiếng rồi lặng lẽ quay
+  // về bản trong mã nguồn — lời hứa kia thành lời nói dối, và kiểu hỏng này
+  // không để lại dấu vết nào ngoài "sao tự nhiên nó lọc khác thế".
+  //
+  // Đổi từ điển trong mã nguồn thì chạy: npm run db:seed -- --force-fields
+  const forceFields = process.argv.includes('--force-fields');
+
   for (const seed of FIELD_SEEDS) {
     const data = {
       name: seed.name,
@@ -101,13 +110,17 @@ async function main(): Promise<void> {
       includeNoSalary: seed.includeNoSalary,
       maxAgeDays: seed.maxAgeDays,
     };
+    const existing = await db.savedFilter.findUnique({ where: { slug: seed.slug } });
+
     await db.savedFilter.upsert({
       where: { slug: seed.slug },
-      update: data,
+      update: forceFields ? data : {},
       create: { slug: seed.slug, ...data },
     });
+
+    const state = !existing ? 'tạo mới' : forceFields ? 'ĐÃ GHI ĐÈ' : 'giữ nguyên bản trong CSDL';
     console.log(
-      `✓ ngành "${seed.slug}": ${seed.keywords.length} từ nhận, ` +
+      `✓ ngành "${seed.slug}" (${state}): ${seed.keywords.length} từ nhận, ` +
         `${seed.excludes.length} từ loại, tỉnh ${seed.provinces.join(', ') || 'mọi nơi'}`,
     );
   }

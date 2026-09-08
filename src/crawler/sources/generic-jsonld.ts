@@ -144,8 +144,9 @@ async function fetchAndParse(
 
   // Lưu JSON-LD gốc, KHÔNG lưu cả trang HTML: khối JSON-LD là toàn bộ thứ
   // parser cần để chạy lại, mà chỉ nặng vài KB thay vì 828 KB.
-  const rawKey = buildBlobKey(ctx.source.code, externalId);
-  await ctx.blobs.put(rawKey, {
+  // Khoá do kho blob TRẢ VỀ, không phải khoá tự dựng — xem chú thích cùng chỗ
+  // trong vietnamworks.ts: kho rỗng trả '' và ghi bừa khoá là tạo con trỏ chết.
+  const rawKey = await ctx.blobs.put(buildBlobKey(ctx.source.code, externalId), {
     url,
     fetchedAt: new Date().toISOString(),
     etag: res.etag,
@@ -154,7 +155,7 @@ async function fetchAndParse(
     fallback,
   });
 
-  return { kind: 'job', job, rawKey };
+  return { kind: 'job', job, rawKey: rawKey || null };
 }
 
 /**

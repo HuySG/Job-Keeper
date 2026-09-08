@@ -2,6 +2,7 @@ import { db } from '@/api/db';
 import { CrawlTrigger, ParseStatus, RunStatus } from '@/enums';
 import { validateJobPosting } from '@/crawler/jsonld';
 import { normalizeJobPosting } from '@/crawler/normalize';
+import { vnwRecordToJsonLd } from '@/crawler/sources/vietnamworks';
 import { createBlobStore } from '@/crawler/storage/blob';
 
 import { loadEnv, parseArgs } from './_env';
@@ -61,15 +62,22 @@ async function main(): Promise<void> {
       continue;
     }
 
-    // Nguồn API lưu bản ghi gốc chứ không phải JSON-LD. Tính lại cho chúng cần
-    // chạy qua adapter, nên tạm bỏ qua ở đây và báo rõ thay vì làm hỏng dữ liệu.
-    if (!blob.jsonLd) {
+    // Nguồn API lưu BẢN GHI GỐC chứ không phải JSON-LD, nên phải dựng lại hình
+    // dạng schema.org trước — đúng bằng hàm mà adapter dùng lúc cào, để hai
+    // đường không bao giờ lệch nhau.
+    //
+    // Trước đây chỗ này bỏ qua thẳng mọi blob API. Hệ quả im lặng: 1.737/2.169
+    // tin trong kho (toàn bộ VietnamWorks) không bao giờ được tính lại, nên mỗi
+    // lần thêm một trường mới lại phải đi cào lại nguồn — đúng cái mà `rawKey`
+    // sinh ra để khỏi phải làm.
+    const source = blob.jsonLd ?? (blob.api ? vnwRecordToJsonLd(blob.api) : null);
+    if (!source) {
       stats.missing += 1;
       continue;
     }
 
     try {
-      const { posting: ld } = validateJobPosting(blob.jsonLd);
+      const { posting: ld } = validateJobPosting(source);
       if (!ld) {
         stats.failed += 1;
         continue;
@@ -111,6 +119,10 @@ async function main(): Promise<void> {
           level: job.level,
           yearsExpMin: job.yearsExpMin,
           yearsExpMax: job.yearsExpMax,
+          industry: job.industry,
+          district: job.district,
+          saturdayWork: job.saturdayWork,
+          scheduleRaw: job.scheduleRaw,
           postedAt: job.postedAt,
           expiresAt: job.expiresAt,
           parseStatus: job.salary.outOfRange ? ParseStatus.PARTIAL : job.parseStatus,
@@ -140,9 +152,7 @@ async function main(): Promise<void> {
 
   console.log(
     `\n${stats.updated} tính lại · ${stats.missing} thiếu blob · ${stats.failed} lỗi` +
-      (stats.missing > 0
-        ? `\n(tin của nguồn API lưu bản ghi gốc chứ không phải JSON-LD — chưa hỗ trợ tính lại)`
-        : ''),
+      (stats.missing > 0 ? `\n(blob không đọc được hoặc không nhận dạng được hình dạng)` : ''),
   );
 }
 

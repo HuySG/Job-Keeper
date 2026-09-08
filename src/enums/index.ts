@@ -57,6 +57,27 @@ export const WorkMode = {
 export type WorkMode = (typeof WorkMode)[keyof typeof WorkMode];
 
 /**
+ * Có phải làm thứ Bảy không — điều kiện làm việc mà không sàn nào cho lọc,
+ * dù ở Việt Nam nó đổi hẳn chất lượng sống của người đi làm.
+ *
+ *   NONE      — nghỉ trọn thứ Bảy (tin ghi "thứ 2 đến thứ 6")
+ *   HALF_DAY  — làm buổi sáng thứ Bảy
+ *   ALTERNATE — luân phiên / cách tuần / xen kẽ
+ *   FULL      — làm trọn thứ Bảy (tin ghi "thứ 2 đến thứ 7")
+ *
+ * `null` nghĩa là **tin không nói**, KHÔNG phải "không làm thứ Bảy". Phân biệt
+ * hai thứ đó là bắt buộc: gộp chúng lại là bịa ra một lời hứa mà tin không hề
+ * đưa ra, và người dùng sẽ đi phỏng vấn rồi mới biết.
+ */
+export const SaturdayWork = {
+  NONE: 'NONE',
+  HALF_DAY: 'HALF_DAY',
+  ALTERNATE: 'ALTERNATE',
+  FULL: 'FULL',
+} as const;
+export type SaturdayWork = (typeof SaturdayWork)[keyof typeof SaturdayWork];
+
+/**
  * Cấp bậc. Thứ tự trong mảng LEVEL_ORDER là thứ tự thăng tiến, dùng khi cần so
  * sánh "cao hơn/thấp hơn" trong thống kê.
  */

@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 
-import { EmploymentType, ParseStatus, WorkMode, type Level } from '@/enums';
+import { EmploymentType, ParseStatus, WorkMode, type Level, type SaturdayWork } from '@/enums';
 
 import type { JobPostingLd } from '../jsonld';
+import { extractDistrict } from './district';
 import { inferLevel } from './level';
 import { extractLocations, isRemoteText, type Province } from './location';
+import { parseSchedule } from './schedule';
 import { parseSalaryJsonLd, parseSalaryText, type NormalizedSalary } from './salary';
 import {
   canonicalizeUrl,
@@ -19,6 +21,8 @@ import {
 export { parseSalaryText, parseSalaryJsonLd } from './salary';
 export { inferLevel, parseYearsOfExperience } from './level';
 export { resolveProvince, extractLocations, PROVINCES } from './location';
+export { extractDistrict } from './district';
+export { parseSchedule, SATURDAY_LABEL, SCHEDULE_RAW_MAX } from './schedule';
 export * from './text';
 
 /** Trần cho descriptionText lưu trong Postgres. Toàn văn nằm ở blob store. */
@@ -46,6 +50,15 @@ export interface NormalizedJob {
   level: Level | null;
   yearsExpMin: number | null;
   yearsExpMax: number | null;
+
+  /** Ngành do NGUỒN khai. Xem `readIndustry` để biết vì sao không tự đoán. */
+  industry: string | null;
+  /** Quận/KCN bóc từ địa chỉ. `null` = tin không nói. */
+  district: string | null;
+  /** Có làm thứ Bảy không. `null` = tin không nói, KHÔNG phải "không làm". */
+  saturdayWork: SaturdayWork | null;
+  /** Câu gốc về giờ giấc, để người đọc tự kiểm chứng kết luận trên. */
+  scheduleRaw: string | null;
 
   postedAt: Date;
   expiresAt: Date | null;
@@ -98,8 +111,12 @@ export function normalizeJobPosting(
 
   // ── Mô tả ──────────────────────────────────────────────────────────────────
   const descriptionRaw = str(ld.description);
-  const descriptionText = descriptionRaw
-    ? truncateBytes(htmlToText(descriptionRaw), DESCRIPTION_MAX_BYTES)
+  // Giữ bản ĐẦY ĐỦ để dò lịch làm việc, chỉ cắt bản đem lưu. Câu về giờ giấc
+  // hay nằm cuối mô tả, cạnh phần phúc lợi — dò trên bản đã cắt 8 KB là tự tay
+  // vứt đi đúng phần cần tìm.
+  const descriptionFull = descriptionRaw ? htmlToText(descriptionRaw) : '';
+  const descriptionText = descriptionFull
+    ? truncateBytes(descriptionFull, DESCRIPTION_MAX_BYTES)
     : null;
   if (!descriptionText) problems.push('thiếu description');
 
@@ -146,6 +163,10 @@ export function normalizeJobPosting(
     .join(' ');
   const levelInfo = inferLevel(title, experienceText);
 
+  // ── Điều kiện làm việc & phân ngành ────────────────────────────────────────
+  const schedule = parseSchedule(descriptionFull || null);
+  const district = extractDistrict(locations.map((l) => l.raw));
+
   return {
     externalId,
     url,
@@ -171,6 +192,11 @@ export function normalizeJobPosting(
     yearsExpMin: levelInfo.yearsMin,
     yearsExpMax: levelInfo.yearsMax,
 
+    industry: readIndustry(ld),
+    district,
+    saturdayWork: schedule.saturday,
+    scheduleRaw: schedule.raw,
+
     postedAt: postedAt ?? new Date(),
     expiresAt,
 
@@ -183,6 +209,44 @@ export function normalizeJobPosting(
 }
 
 // ─── Phụ trợ ─────────────────────────────────────────────────────────────────
+
+/**
+ * Ngành, lấy từ chỗ NGUỒN TỰ KHAI chứ không đoán từ mô tả.
+ *
+ * Vì sao không đoán: đo 08/09/2026, đếm từ khoá trên mô tả cho ra "43% tin
+ * thuộc ngành dược" — hoàn toàn giả, vì sau khi bỏ dấu thì "dược" và "được"
+ * trùng nhau, mà "được" thì tin nào chẳng có. Bài học: từ tiếng Việt MỘT ÂM
+ * TIẾT không dấu là khoá so khớp tồi.
+ *
+ * Ngược lại, `industriesV3` của VietnamWorks có ở 258/258 tin đã đo và do
+ * chính sàn phân loại. Ưu tiên `industry`, không có mới lùi về
+ * `occupationalCategory`.
+ *
+ * Lưu ý: giá trị ở đây không đồng nhất giữa các nguồn — VNW trả NGÀNH CỦA CÔNG
+ * TY ("Dệt may/May mặc/Giày dép"), còn vieclam24h trả DANH MỤC NGHỀ ("Thu mua -
+ * Kho vận - Chuỗi cung ứng"). Cố ý lưu nguyên văn, việc gộp về vài loại mua
+ * hàng là chuyện của bảng tra ở tầng đọc, nơi sửa được mà không phải migrate.
+ */
+function readIndustry(ld: JobPostingLd): string | null {
+  const candidates = [ld.industry, ld.occupationalCategory];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const value = normalizeWhitespace(candidate);
+      if (value) return truncate(value);
+    }
+    if (Array.isArray(candidate)) {
+      const first = candidate.map((v) => normalizeWhitespace(str(v))).find(Boolean);
+      if (first) return truncate(first);
+    }
+  }
+  return null;
+}
+
+/** Ngành là nhãn ngắn. Cắt để một nguồn khai bậy không thổi phồng cột. */
+function truncate(value: string): string {
+  return value.length <= 80 ? value : `${value.slice(0, 79)}…`;
+}
 
 function str(value: unknown): string {
   if (typeof value === 'string') return value;

@@ -573,6 +573,104 @@ mọi cấp bậc. Đổi ý thì `UPDATE SavedFilter`, không phải sửa code
 
 ---
 
+## 13. Vòng hai — lọc sâu và tự động hoá (08/09/2026)
+
+Bốn yêu cầu thêm: **tự động cào**, **lọc theo kinh nghiệm**, **chia loại mua
+hàng**, **lọc theo lương / quận / có làm thứ Bảy**.
+
+Đo dữ liệu trước khi xây, và kết quả đo chia bốn yêu cầu đó thành ba nhóm khác
+hẳn nhau:
+
+| Yêu cầu | Độ phủ dữ liệu | Kết quả |
+|---|---|---|
+| Loại mua hàng | **100%** (`industry` do nguồn khai) | ✅ 9 loại, 250/258 xếp theo ngành |
+| Kinh nghiệm | **93%** (`yearsExpMin`) | ✅ lọc theo mức trần |
+| Quận / KCN | **45%** (bóc từ địa chỉ) | ✅ có, kèm nhãn nói rõ độ phủ |
+| Lương | **25%** công khai | ✅ lọc giữ cả tin "thoả thuận" |
+| **Làm thứ Bảy** | **1%** | ⚠️ **xây xong nhưng gần như không có dữ liệu** |
+| Tự động cào | — | ✅ GitHub Actions, 4 lượt/ngày |
+
+### ⚠️ Thứ Bảy: bộ lọc đúng, dữ liệu thì không có
+
+Đây là chỗ phải nói thẳng. Bộ đọc lịch làm việc chạy đúng — 28 test trên câu
+thật, bắt được cả ca hiểm `"thứ 2 - thứ 6, làm online sáng thứ 7"` (là NỬA
+NGÀY, không phải nghỉ). Nhưng **chỉ 3/258 tin trong ngành có dữ liệu**, vì:
+
+- VietnamWorks **không hỏi nhà tuyển dụng về ngày làm việc** — chỉ 2% tin nhắc tới.
+  Đang chiếm 257/258 tin còn sống thuộc ngành.
+- vieclam24h thì có: **22%** tin nhắc lịch, 7% ghi rõ "T2–T7". Nhưng tin của họ
+  phần lớn đã hết hạn (sitemap đóng băng 6 tuần, xem §4.2).
+
+→ Bộ lọc sẽ tự khá lên khi kho có thêm tin từ nguồn chịu ghi lịch. Trang đã
+hiện cảnh báo ngay dưới thanh lọc thay vì để người dùng bấm vào rồi tự đoán vì
+sao rỗng.
+
+### Vì sao "loại mua hàng" KHÔNG đoán từ mô tả
+
+Thử đếm từ khoá trên mô tả trước: ra **"43% tin thuộc ngành dược"**. Hoàn toàn
+giả — sau khi bỏ dấu thì `dược` trùng `được`, mà `được` thì tin nào chẳng có.
+
+> **Bài học chung: từ tiếng Việt MỘT ÂM TIẾT sau khi bỏ dấu là khoá so khớp tồi.**
+> Nó áp cho cả `field-match` lẫn mọi bộ đọc sau này.
+
+Đường đúng: `industriesV3` do VietnamWorks tự khai, có ở **258/258** tin. Nhưng
+nó nằm trong blob chứ chưa vào CSDL — nên phải thêm cột và backfill.
+
+### Bốn cột mới + một sửa chữa nền
+
+Thêm `industry`, `district`, `saturdayWork`, `scheduleRaw` (đều nullable, SQL
+sinh ra chỉ là 4 × `ADD COLUMN`, không khoá bảng, không mất dữ liệu, ~2,5 MB ở
+mốc 10.000 tin).
+
+Nhưng backfill lộ ra một chỗ hỏng có sẵn: **`reparse` bỏ qua toàn bộ blob của
+nguồn API** — tức 1.737/2.169 tin. Nghĩa là siêu năng lực "tính lại không cào
+lại" chưa từng dùng được cho VietnamWorks. Sửa bằng cách mở `vnwRecordToJsonLd`
+ra cho reparse dùng lại đúng hàm mà adapter dùng lúc cào.
+
+Kết quả: **2.169/2.169 tin tính lại, 0 lỗi, 0 request mạng.**
+
+### Một con trỏ chết được chặn trước khi kịp sinh ra
+
+Khi viết workflow mới thấy: chạy crawler trên CI với `BLOB_DRIVER=fs` thì blob
+ghi vào ổ đĩa runner rồi bị xoá, **nhưng `rawKey` vẫn được ghi vào CSDL** —
+adapter dựng khoá tại chỗ và bỏ qua giá trị kho blob trả về. Mỗi tin cào trên
+CI sẽ để lại một con trỏ tới tệp không bao giờ tồn tại, và `reparse` báo "thiếu
+blob" mãi mãi.
+
+Sửa: adapter dùng khoá do `blobs.put()` **trả về**; kho rỗng trả `''` → ghi
+`rawKey = NULL`. Nói thật "không có bản thô" thay vì để lại con trỏ hỏng.
+
+### Seed không được phép ghi đè từ điển nữa
+
+Actions chạy `db:seed` bốn lần một ngày. Seed cũ ghi đè `SavedFilter`, nên mọi
+tinh chỉnh bằng SQL sống nhiều nhất sáu tiếng rồi lặng lẽ quay về bản trong mã
+nguồn — đúng lời hứa "sửa bằng UPDATE, không cần deploy" bị phá.
+
+Nay seed **chỉ tạo mới**. Đổi từ điển trong mã nguồn thì gọi rõ:
+`npm run db:seed -- --force-fields`.
+
+### Phân bố loại mua hàng — 189 tin nhận chắc
+
+```
+68  Sản xuất & nhà máy          30  Thương mại & bán lẻ
+26  Dệt may & da giày           23  Xây dựng & dự án
+12  Y tế & dược                 11  Dịch vụ, CNTT & tài chính
+11  Hậu cần & chuỗi cung ứng     7  Thực phẩm, F&B & nông nghiệp
+ 1  Chưa phân loại
+```
+
+Quận có nhiều tin nhất: Thủ Đức 11 · Quận 7 10 · Quận 1 9 · Quận 3 7 ·
+Bình Thạnh 5 · Tân Bình 4 · KCN Tân Tạo 4.
+
+### Còn lại
+
+- **N3 — soi tay 30 tin** vẫn chưa làm.
+- Bộ lọc thứ Bảy cần thêm nguồn chịu ghi lịch mới có ích thật.
+- Actions cần đặt secrets `DATABASE_URL` và `CRAWLER_CONTACT_EMAIL` mới chạy;
+  thêm `R2_*` thì giữ được blob của tin cào trên CI.
+
+---
+
 ## Phụ lục — nhật ký đo, 08/09/2026
 
 Ghi lại để sáu tháng nữa không ai mất một ngày dò lại và rút ra đúng kết luận cũ.

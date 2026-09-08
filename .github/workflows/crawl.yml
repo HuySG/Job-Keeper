@@ -1,0 +1,92 @@
+name: Cào tin & kiểm còn tuyển
+
+# Vì sao GitHub Actions chứ không phải Vercel Cron hay pg_cron:
+#
+#   · Vercel Cron gọi vào một hàm serverless bị cắt sau vài chục giây, còn một
+#     lượt cào vieclam24h mất ~12 phút.
+#   · pg_cron trên Neon chỉ chạy khi compute còn thức. Gói Free ngủ sau vài
+#     phút, nên job sẽ IM LẶNG không chạy — kiểu hỏng tệ nhất.
+#
+# Xem docs/deploy.md §0.
+
+on:
+  schedule:
+    # Bốn lần một ngày: chỉ VietnamWorks (API, nhanh) + kiểm còn-sống.
+    # Giờ UTC, Việt Nam là UTC+7 -> 08:00, 14:00, 20:00, 02:00 giờ Việt Nam.
+    - cron: '0 1,7,13,19 * * *'
+    # Một lần một ngày, thêm vieclam24h (chậm hơn nhiều vì phải tải từng trang).
+    # 18:30 UTC = 01:30 giờ Việt Nam, lúc sàn vắng người nhất.
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Nguồn cần cào, cách nhau bằng dấu phẩy'
+        default: 'vnw'
+      limit:
+        description: 'Trần số tin mỗi nguồn'
+        default: '800'
+
+# Hai lượt cào chồng nhau sẽ cùng ghi vào một bảng và cùng gõ cửa một sàn.
+# Xếp hàng, không huỷ lượt đang chạy giữa chừng.
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    # Trần cứng: một lượt treo không được phép ăn hết phút miễn phí của tháng.
+    timeout-minutes: 30
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CRAWLER_CONTACT_EMAIL: ${{ secrets.CRAWLER_CONTACT_EMAIL }}
+      CRAWLER_BOT_NAME: BaeJobBot
+      # ⚠️ Ổ đĩa của runner bị xoá sau mỗi lượt, nên KHÔNG dùng driver "fs" ở
+      #    đây: blob sẽ mất mà `rawKey` vẫn nằm lại trong CSDL, tạo ra con trỏ
+      #    chết và `npm run reparse` sẽ báo "thiếu blob" mãi mãi.
+      #    Khai đủ ba biến R2_* trong repo secrets thì tự chuyển sang R2 và giữ
+      #    được blob; chưa khai thì dùng kho rỗng — tin vẫn vào CSDL đầy đủ,
+      #    chỉ là không có bản thô để tính lại. Crawler ghi rawKey = NULL cho
+      #    những tin đó, tức là nói thật thay vì để lại con trỏ hỏng.
+      BLOB_DRIVER: ${{ secrets.R2_ACCOUNT_ID != '' && 'r2' || 'null' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sinh Prisma Client
+        run: npx prisma generate
+
+      - name: Nạp nguồn và ngành
+        # Chạy được nhiều lần không hỏng, và là thứ bảo đảm cấu hình nhắm mục
+        # tiêu trong mã nguồn luôn khớp với cấu hình trong CSDL.
+        run: npm run db:seed
+
+      - name: Cào VietnamWorks
+        run: npm run crawl -- --source ${{ inputs.sources || 'vnw' }} --full --limit ${{ inputs.limit || 800 }}
+
+      - name: Cào vieclam24h (một lần mỗi ngày)
+        if: github.event.schedule == '30 18 * * *'
+        run: npm run crawl -- --source vieclam24h --full --limit 400
+
+      - name: Kiểm tin còn tuyển
+        # Chỉ kiểm tin thuộc ngành đang quan tâm — vài chục request thay vì vài
+        # nghìn. Ba cái van trong scripts/recheck.ts lo phần còn lại.
+        run: npm run recheck -- --filter thu-mua-hcm
+
+      - name: Sức khoẻ dữ liệu
+        # Luôn chạy, kể cả khi bước trên hỏng: khi crawler vỡ thì đây đúng là
+        # lúc cần nhìn số liệu nhất.
+        if: always()
+        run: npm run db:inspect

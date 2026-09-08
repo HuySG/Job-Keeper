@@ -233,10 +233,31 @@ async function toCrawlItem(
     normalized.expiresAt = normalized.expiresAt ?? new Date(0);
   }
 
-  const rawKey = buildBlobKey(ctx.source.code, externalId);
-  await ctx.blobs.put(rawKey, { fetchedAt: new Date().toISOString(), api: job });
+  // Dùng khoá do kho blob TRẢ VỀ, không dùng khoá tự dựng.
+  //
+  // Kho rỗng (BLOB_DRIVER=null, dùng khi chạy khô hoặc chạy trên CI không có
+  // R2) trả chuỗi rỗng. Ghi bừa khoá tự dựng vào DB là tạo ra một con trỏ tới
+  // tệp không bao giờ tồn tại: `npm run reparse` sau này sẽ báo "thiếu blob"
+  // mãi mãi, và siêu năng lực tính-lại-không-cào-lại mất dần mà không ai thấy.
+  const stored = await ctx.blobs.put(buildBlobKey(ctx.source.code, externalId), {
+    fetchedAt: new Date().toISOString(),
+    api: job,
+  });
 
-  return { kind: 'job', job: normalized, rawKey };
+  return { kind: 'job', job: normalized, rawKey: stored || null };
+}
+
+/**
+ * Dựng lại bản ghi API thành hình dạng schema.org.
+ *
+ * MỞ RA NGOÀI vì `scripts/reparse.ts` cần nó: blob của nguồn này lưu bản ghi
+ * API thô chứ không phải JSON-LD, nên không có hàm này thì reparse phải bỏ qua
+ * toàn bộ tin VietnamWorks — mà đó đang là 1.737/2.169 tin trong kho. Không
+ * backfill được nghĩa là mỗi lần thêm một trường mới lại phải đi cào lại nguồn,
+ * đúng cái mà `rawKey` sinh ra để tránh.
+ */
+export function vnwRecordToJsonLd(job: unknown): Record<string, unknown> {
+  return toJsonLd(job as VnwJob);
 }
 
 function toJsonLd(job: VnwJob): Record<string, unknown> {
@@ -259,6 +280,14 @@ function toJsonLd(job: VnwJob): Record<string, unknown> {
     jobLocation: buildLocations(job),
     baseSalary: readSalary(job),
     skills: (job.skills ?? []).map((s) => s.skillName).filter(Boolean),
+    // NGÀNH CỦA CÔNG TY — tách riêng khỏi occupationalCategory là có chủ ý.
+    // `jobFunction` của nguồn này gần như luôn là "Hậu Cần/Xuất Nhập Khẩu/Kho
+    // Bãi" với mọi tin thu mua (đo: 44%), tức nó nói NHÓM NGHỀ chứ không nói
+    // công ty làm gì. Còn `industriesV3` mới phân biệt được mua hàng cho nhà
+    // máy dệt may với mua hàng cho công ty xây dựng — đúng thứ cần để chia loại.
+    industry: (job.industriesV3 ?? [])
+      .map((i) => i.industryV3NameVI || i.industryV3Name)
+      .filter(Boolean),
     occupationalCategory: [
       job.jobFunction?.parentNameVI,
       job.jobFunction?.parentName,

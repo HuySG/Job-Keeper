@@ -1,4 +1,5 @@
 import { FRESH_CHECK_HOURS, findFieldJobs, listFields } from '@/api/field.api';
+import { FacetFilter } from '@/components/job/facet-filters';
 import { JobCard } from '@/components/job/job-card';
 import { Badge, Chip } from '@/components/ui/badge';
 import { Cmd, Empty } from '@/components/ui/empty';
@@ -20,15 +21,13 @@ const DEFAULT_FIELD = 'thu-mua-hcm';
 /**
  * Ngành của tôi — trả lời **"tin nào đúng nghề tôi nhắm, và có còn tuyển không"**.
  *
- * Đây là trang khác hẳn "Kho tin" ở một điểm: kho tin lọc bằng những gì gõ
- * được thành SQL, còn trang này lọc bằng một TỪ ĐIỂN có luật ưu tiên. Nhờ vậy
- * gõ "thu mua" không chỉ ra đúng chữ "thu mua" mà ra cả "procurement",
- * "merchandiser", "mua sắm" — và KHÔNG ra "kế toán mua hàng".
+ * Khác "Kho tin" ở một điểm: kho tin lọc bằng những gì gõ được thành SQL, còn
+ * trang này lọc bằng một TỪ ĐIỂN có luật ưu tiên. Gõ "thu mua" ra cả
+ * "procurement", "merchandiser", "mua sắm" — và KHÔNG ra "kế toán mua hàng".
  *
- * Hai con số ở đầu trang là hai câu hỏi phải trả lời được mọi lúc:
- *   - bao nhiêu tin đúng ngành  -> công cụ có tìm được gì không
- *   - bao nhiêu tin vừa kiểm    -> những tin đó có còn thật không
- * Thiếu con số thứ hai thì đây chỉ là một cái máy tìm kiếm nữa.
+ * Thanh lọc ở đây kiêm luôn vai trò BẢNG LIỆT KÊ: mỗi chip mang số tin, nên
+ * câu "ngành mua hàng có những loại nào, mỗi loại bao nhiêu" được trả lời ngay
+ * tại chỗ chọn, không cần thêm một khối thống kê riêng nói cùng một điều.
  */
 export default async function FieldPage({
   searchParams,
@@ -40,9 +39,20 @@ export default async function FieldPage({
   const slug = readParam(params, 'f') ?? DEFAULT_FIELD;
   const includeWeak = readFlag(params, 'weak');
   const strictHcm = readFlag(params, 'hep');
+  const maxYears = readNumber(params, 'kn');
+  const salaryMin = readNumber(params, 'luong');
 
   const [result, fields] = await Promise.all([
-    findFieldJobs(slug, { page: readNumber(params, 'page'), includeWeak, strictHcm }),
+    findFieldJobs(slug, {
+      page: readNumber(params, 'page'),
+      includeWeak,
+      strictHcm,
+      ...(readParam(params, 'loai') ? { purchaseType: readParam(params, 'loai') } : {}),
+      ...(readParam(params, 'quan') ? { district: readParam(params, 'quan') } : {}),
+      ...(readParam(params, 't7') ? { saturday: readParam(params, 't7') } : {}),
+      ...(maxYears !== undefined ? { maxYears } : {}),
+      ...(salaryMin !== undefined ? { salaryMin } : {}),
+    }),
     listFields(),
   ]);
 
@@ -62,6 +72,7 @@ export default async function FieldPage({
     result.scanned === 0 ? 0 : Math.round((result.total / result.scanned) * 100);
   const freshPct =
     result.total === 0 ? 0 : Math.round((result.freshlyChecked / result.total) * 100);
+  const cover = (n: number): string => `${n}/${result.total} tin có`;
 
   return (
     <>
@@ -97,8 +108,7 @@ export default async function FieldPage({
           />
           {/* CỐ Ý không gọi đây là "độ chính xác". Độ chính xác là tỷ lệ tin
               nhận vào mà ĐÚNG thật, và nó chỉ đo được bằng cách mở tay từng
-              tin. Con số này chỉ nói từ điển lọc chặt tới đâu — hữu ích để
-              thấy khi nó bỗng nới ra hoặc siết lại, không hơn. */}
+              tin. Con số này chỉ nói từ điển lọc chặt tới đâu. */}
           <Stat
             label="lọt qua từ điển"
             value={`${selectivity}%`}
@@ -106,11 +116,74 @@ export default async function FieldPage({
             hint="Tỷ lệ tin trong phạm vi tỉnh/thành được từ điển nhận. Không phải độ chính xác — thứ đó phải soi tay mới biết."
           />
           <Stat
-            label="từ điển"
-            value={`${result.keywordCount} + ${result.excludeCount}`}
-            sub="từ nhận + từ loại"
-            hint="Sửa bằng SQL trên bảng SavedFilter, không cần deploy"
+            label="có ghi lương"
+            value={`${result.total ? Math.round((result.coverage.salary / result.total) * 100) : 0}%`}
+            sub={`${result.coverage.salary}/${result.total} tin`}
+            hint="Phần còn lại ghi 'Thoả thuận'. Bộ lọc lương vẫn GIỮ chúng, vì loại đi là bỏ mất phần lớn thị trường."
           />
+        </div>
+
+        {/* ── Thanh lọc, kiêm bảng liệt kê ─────────────────────────────────── */}
+        <div className="space-y-2.5 rounded-card border border-border bg-surface px-4 py-3.5">
+          <FacetFilter
+            pathname={PATH}
+            params={params}
+            name="loai"
+            label="Loại mua hàng"
+            facets={result.facets.purchaseTypes}
+            current={readParam(params, 'loai')}
+            max={9}
+          />
+          <FacetFilter
+            pathname={PATH}
+            params={params}
+            name="kn"
+            label="Kinh nghiệm"
+            facets={result.facets.experience}
+            current={readParam(params, 'kn')}
+            allLabel="Mọi mức"
+            coverage={cover(result.coverage.experience)}
+          />
+          <FacetFilter
+            pathname={PATH}
+            params={params}
+            name="quan"
+            label="Quận / khu"
+            facets={result.facets.districts}
+            current={readParam(params, 'quan')}
+            allLabel="Mọi nơi"
+            coverage={cover(result.coverage.district)}
+            max={10}
+          />
+          <FacetFilter
+            pathname={PATH}
+            params={params}
+            name="t7"
+            label="Thứ 7"
+            facets={result.facets.saturday}
+            current={readParam(params, 't7')}
+            allLabel="Không xét"
+            coverage={cover(result.coverage.saturday)}
+          />
+          <FacetFilter
+            pathname={PATH}
+            params={params}
+            name="luong"
+            label="Lương từ"
+            facets={SALARY_STEPS}
+            current={readParam(params, 'luong')}
+            allLabel="Mọi mức"
+          />
+
+          {/* Cảnh báo thật thà: một bộ lọc gần như không có dữ liệu thì phải nói
+              ra, chứ không để người dùng bấm vào rồi tự đoán vì sao rỗng. */}
+          {result.total > 0 && result.coverage.saturday / result.total < 0.1 && (
+            <p className="pt-1 text-xs text-muted">
+              ⚠ Chỉ <strong>{result.coverage.saturday}</strong> tin nói rõ lịch thứ 7 — phần lớn tin
+              trên VietnamWorks không ghi. Lọc theo cột này sẽ bỏ sót gần hết. Nguồn vieclam24h ghi
+              nhiều hơn (khoảng 22%), nên con số này sẽ khá lên khi kho có thêm tin từ đó.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -155,7 +228,7 @@ export default async function FieldPage({
         </div>
 
         {result.items.length === 0 ? (
-          <Empty title="Chưa có tin nào đúng ngành">
+          <Empty title="Không tin nào khớp">
             {result.scanned === 0 ? (
               <>
                 Kho chưa có tin nào trong phạm vi này. Chạy{' '}
@@ -163,30 +236,52 @@ export default async function FieldPage({
               </>
             ) : (
               <>
-                Đã chấm {result.scanned} tin nhưng không tin nào khớp từ điển. Soi bằng{' '}
-                <Cmd>npm run match -- --show reject</Cmd> xem có loại oan không.
+                Thử gỡ bớt một chip ở thanh lọc phía trên. Nếu nghi từ điển loại oan thì soi bằng{' '}
+                <Cmd>npm run match -- --show reject</Cmd>.
               </>
             )}
           </Empty>
         ) : (
           <div className="grid gap-3">
-            {result.items.map(({ job, match }) => (
+            {result.items.map(({ job, match, purchase }) => (
               <div key={job.id} className="space-y-1">
                 <JobCard job={job} />
-                <div className="flex flex-wrap items-center gap-2 pl-1 text-xs text-muted">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-xs text-muted">
+                  <Badge
+                    tone="accent"
+                    dot={false}
+                    hint={
+                      purchase.basis === 'industry'
+                        ? `Theo ngành nguồn khai: ${purchase.evidence}`
+                        : purchase.basis === 'keyword'
+                          ? 'Đoán từ tiêu đề/mô tả — kém chắc hơn'
+                          : purchase.hint
+                    }
+                  >
+                    {purchase.label}
+                    {purchase.basis === 'keyword' && ' ?'}
+                  </Badge>
+                  {job.district && <Chip>{job.district}</Chip>}
+                  {job.yearsExpMin !== null && <Chip>{job.yearsExpMin}+ năm KN</Chip>}
+                  {job.saturdayWork && (
+                    <Chip>{SATURDAY_TEXT[job.saturdayWork] ?? job.saturdayWork}</Chip>
+                  )}
                   {match.verdict === 'weak' && (
-                    <Badge tone="warn" hint="Từ khoá chỉ xuất hiện trong mô tả, không có ở tiêu đề">
+                    <Badge tone="warn" hint="Từ khoá chỉ có trong mô tả, không có ở tiêu đề">
                       cần soi tay
                     </Badge>
                   )}
                   <span>
                     khớp:{' '}
                     {(match.titleHits.length ? match.titleHits : match.descHits)
-                      .slice(0, 4)
+                      .slice(0, 3)
                       .join(', ')}
                   </span>
                   {job.lastCheckedAt === null && <span>· chưa kiểm còn-sống lần nào</span>}
                 </div>
+                {job.scheduleRaw && (
+                  <p className="pl-1 text-xs text-faint italic">“{job.scheduleRaw}”</p>
+                )}
               </div>
             ))}
           </div>
@@ -197,3 +292,17 @@ export default async function FieldPage({
     </>
   );
 }
+
+/** Mốc lương, tính bằng VND/tháng. Không đếm được trước nên không mang số tin. */
+const SALARY_STEPS = [
+  { value: '15000000', label: 'từ 15tr', count: 0 },
+  { value: '25000000', label: 'từ 25tr', count: 0 },
+  { value: '40000000', label: 'từ 40tr', count: 0 },
+];
+
+const SATURDAY_TEXT: Record<string, string> = {
+  NONE: 'Nghỉ thứ 7',
+  HALF_DAY: 'Sáng thứ 7',
+  ALTERNATE: 'Thứ 7 luân phiên',
+  FULL: 'Làm cả thứ 7',
+};

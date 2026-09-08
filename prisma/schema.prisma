@@ -151,6 +151,38 @@ model JobPosting {
   yearsExpMin    Int?
   yearsExpMax    Int?
 
+  // ── Bốn trường bóc thêm, phục vụ lọc theo NGHỀ CON và ĐIỀU KIỆN LÀM VIỆC ───
+  //
+  // Cả bốn đều NULLABLE và đều tính lại được từ blob bằng `npm run reparse` —
+  // tức là dữ liệu phái sinh, mất cũng dựng lại được, không phải nguồn sự thật.
+
+  /// Ngành của CÔNG TY theo cách nguồn tự khai ("Dệt may/May mặc/Giày dép",
+  /// "Bán lẻ/Bán sỉ", "Kỹ thuật xây dựng"). Đây là tín hiệu đáng tin hơn nhiều
+  /// so với đoán từ khoá: đo 08/09/2026 thì 258/258 tin thu mua của VNW đều có,
+  /// còn đếm từ khoá trên mô tả thì "dược" khớp nhầm cả chữ "được" (43% giả).
+  /// Việc gộp 35 giá trị này thành vài LOẠI MUA HÀNG là bảng tra trong code,
+  /// KHÔNG phải cột — để sửa cách gộp không cần migrate.
+  industry       String?
+
+  /// Quận/khu công nghiệp bóc từ chuỗi địa chỉ ("Quận 7", "Tân Bình",
+  /// "KCN Tân Thuận"). Bảng Location chỉ tới cấp tỉnh, mà trong một thành phố
+  /// thì quận mới là thứ quyết định có đi làm nổi hay không.
+  /// Độ phủ có hạn (~40%) vì nhiều tin chỉ ghi "Hồ Chí Minh" — NULL nghĩa là
+  /// "tin không nói", không phải "không có quận".
+  district       String?
+
+  /// Lịch làm thứ Bảy: NONE | HALF_DAY | ALTERNATE | FULL. NULL = tin không nói.
+  /// Ở Việt Nam đây là điều kiện làm việc mà không sàn nào cho lọc, dù nó đổi
+  /// hẳn chất lượng sống. Cảnh báo về độ phủ: đo 08/09/2026, chỉ 2% tin VNW
+  /// nhắc tới lịch làm việc, còn vieclam24h là 22%.
+  saturdayWork   String?
+
+  /// Câu gốc đã bóc ra được về thời gian làm việc, CẮT <= 200 ký tự.
+  /// Có nó thì người đọc tự kiểm chứng được kết luận của parser thay vì phải
+  /// tin. Cắt ngắn là cố ý: Neon Free chỉ có 0,5 GB và mọi cột text không giới
+  /// hạn đều là một lỗ rò vào hạn mức đó.
+  scheduleRaw    String?
+
   // ── Vòng đời: dữ liệu cho máy kiểm 4 tầng (TECHSTACK.md §4) ────────────────
   postedAt    DateTime
   /// validThrough của schema.org. Tầng 1 của máy kiểm — 0 request.
