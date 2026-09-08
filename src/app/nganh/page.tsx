@@ -1,11 +1,10 @@
 import { FRESH_CHECK_HOURS, findFieldJobs, listFields } from '@/api/field.api';
-import { FacetFilter } from '@/components/job/facet-filters';
+import { FieldFilterBar } from '@/components/job/field-filter-bar';
 import { JobCard } from '@/components/job/job-card';
 import { Badge, Chip } from '@/components/ui/badge';
 import { Cmd, Empty } from '@/components/ui/empty';
 import { PageHeader } from '@/components/ui/page-header';
 import { Pagination } from '@/components/ui/pagination';
-import { SegmentedLinks } from '@/components/ui/segmented';
 import { Stat } from '@/components/ui/stat';
 import { questionFor } from '@/constants/nav';
 import { readFlag, readNumber, readParam, type SearchParams } from '@/lib/query';
@@ -25,9 +24,14 @@ const DEFAULT_FIELD = 'thu-mua-hcm';
  * trang này lọc bằng một TỪ ĐIỂN có luật ưu tiên. Gõ "thu mua" ra cả
  * "procurement", "merchandiser", "mua sắm" — và KHÔNG ra "kế toán mua hàng".
  *
- * Thanh lọc ở đây kiêm luôn vai trò BẢNG LIỆT KÊ: mỗi chip mang số tin, nên
- * câu "ngành mua hàng có những loại nào, mỗi loại bao nhiêu" được trả lời ngay
- * tại chỗ chọn, không cần thêm một khối thống kê riêng nói cùng một điều.
+ * Bộ lọc là `<form method="get">` với các ô `<select>`, giống hệt Kho tin —
+ * một kiểu tương tác cho cả hai trang, không JavaScript, mỗi bộ lọc là một URL
+ * dán được. Số tin nằm ngay trong tên từng lựa chọn, nên chọn xong không bao
+ * giờ nhận danh sách rỗng bất ngờ.
+ *
+ * Riêng bảng chia loại mua hàng vẫn hiện thành một dòng chữ bên dưới: số tin
+ * tuy đã có trong ô chọn nhưng phải mở dropdown mới thấy, mà câu "ngành này
+ * gồm những loại nào" đáng được trả lời ngay khi liếc mắt.
  */
 export default async function FieldPage({
   searchParams,
@@ -72,25 +76,12 @@ export default async function FieldPage({
     result.scanned === 0 ? 0 : Math.round((result.total / result.scanned) * 100);
   const freshPct =
     result.total === 0 ? 0 : Math.round((result.freshlyChecked / result.total) * 100);
-  const cover = (n: number): string => `${n}/${result.total} tin có`;
 
   return (
     <>
-      <PageHeader
-        title={result.name}
-        description={questionFor(PATH)}
-        actions={
-          fields.length > 1 ? (
-            <SegmentedLinks
-              pathname={PATH}
-              params={params}
-              name="f"
-              current={result.slug}
-              options={fields.map((f) => ({ value: f.slug, label: f.name }))}
-            />
-          ) : null
-        }
-      />
+      {/* Ô chọn ngành nằm trong thanh lọc bên dưới, không đặt thêm ở đây: hai
+          chỗ cùng đổi một tham số thì người dùng phải đoán xem chỗ nào thắng. */}
+      <PageHeader title={result.name} description={questionFor(PATH)} />
 
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -117,114 +108,49 @@ export default async function FieldPage({
           />
           <Stat
             label="có ghi lương"
-            value={`${result.total ? Math.round((result.coverage.salary / result.total) * 100) : 0}%`}
-            sub={`${result.coverage.salary}/${result.total} tin`}
+            value={`${result.inFieldTotal ? Math.round((result.coverage.salary / result.inFieldTotal) * 100) : 0}%`}
+            sub={`${result.coverage.salary}/${result.inFieldTotal} tin`}
             hint="Phần còn lại ghi 'Thoả thuận'. Bộ lọc lương vẫn GIỮ chúng, vì loại đi là bỏ mất phần lớn thị trường."
           />
         </div>
 
-        {/* ── Thanh lọc, kiêm bảng liệt kê ─────────────────────────────────── */}
-        <div className="space-y-2.5 rounded-card border border-border bg-surface px-4 py-3.5">
-          <FacetFilter
-            pathname={PATH}
-            params={params}
-            name="loai"
-            label="Loại mua hàng"
-            facets={result.facets.purchaseTypes}
-            current={readParam(params, 'loai')}
-            max={9}
-          />
-          <FacetFilter
-            pathname={PATH}
-            params={params}
-            name="kn"
-            label="Kinh nghiệm"
-            facets={result.facets.experience}
-            current={readParam(params, 'kn')}
-            allLabel="Mọi mức"
-            coverage={cover(result.coverage.experience)}
-          />
-          <FacetFilter
-            pathname={PATH}
-            params={params}
-            name="quan"
-            label="Quận / khu"
-            facets={result.facets.districts}
-            current={readParam(params, 'quan')}
-            allLabel="Mọi nơi"
-            coverage={cover(result.coverage.district)}
-            max={10}
-          />
-          <FacetFilter
-            pathname={PATH}
-            params={params}
-            name="t7"
-            label="Thứ 7"
-            facets={result.facets.saturday}
-            current={readParam(params, 't7')}
-            allLabel="Không xét"
-            coverage={cover(result.coverage.saturday)}
-          />
-          <FacetFilter
-            pathname={PATH}
-            params={params}
-            name="luong"
-            label="Lương từ"
-            facets={SALARY_STEPS}
-            current={readParam(params, 'luong')}
-            allLabel="Mọi mức"
-          />
+        <FieldFilterBar result={result} params={params} fields={fields} />
 
-          {/* Cảnh báo thật thà: một bộ lọc gần như không có dữ liệu thì phải nói
-              ra, chứ không để người dùng bấm vào rồi tự đoán vì sao rỗng. */}
-          {result.total > 0 && result.coverage.saturday / result.total < 0.1 && (
-            <p className="pt-1 text-xs text-muted">
-              ⚠ Chỉ <strong>{result.coverage.saturday}</strong> tin nói rõ lịch thứ 7 — phần lớn tin
-              trên VietnamWorks không ghi. Lọc theo cột này sẽ bỏ sót gần hết. Nguồn vieclam24h ghi
-              nhiều hơn (khoảng 22%), nên con số này sẽ khá lên khi kho có thêm tin từ đó.
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Chip>chỉ tin còn sống</Chip>
-            {result.provinces.map((province) => (
-              <Chip key={province}>{province}</Chip>
+        {/* Bảng liệt kê loại mua hàng. Số tin đã nằm sẵn trong từng lựa chọn của
+            ô "Loại mua hàng", nhưng dropdown thì phải mở ra mới thấy — mà câu
+            "ngành mua hàng gồm những loại nào, mỗi loại bao nhiêu tin" đáng
+            được trả lời ngay khi liếc mắt, không cần thao tác nào. */}
+        {result.facets.purchaseTypes.length > 0 && (
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1 text-xs text-muted">
+            <span className="text-faint">Chia loại:</span>
+            {result.facets.purchaseTypes.map((type) => (
+              <span key={type.value} title={type.hint}>
+                {type.label} <strong className="tnum text-text">{type.count}</strong>
+              </span>
             ))}
-            {result.maxAgeDays && <Chip>đăng trong {result.maxAgeDays} ngày</Chip>}
-            {strictHcm && result.droppedByNarrowHcm > 0 && (
-              <Chip>bỏ {result.droppedByNarrowHcm} tin ngoài HCM cũ</Chip>
-            )}
-          </div>
+          </p>
+        )}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedLinks
-              pathname={PATH}
-              params={params}
-              name="weak"
-              label="Độ chắc:"
-              current={includeWeak ? '1' : '0'}
-              options={[
-                { value: '0', label: 'Chỉ chắc chắn' },
-                { value: '1', label: 'Kể cả tin yếu' },
-              ]}
-            />
-            {/* Sáp nhập 2025 gộp Bình Dương và Bà Rịa – Vũng Tàu vào TP.HCM.
-                Đúng về hành chính, nhưng Thủ Đức và Bến Cát là hai thế giới đi
-                lại khác nhau — nên để người dùng tự chọn, đừng quyết hộ. */}
-            <SegmentedLinks
-              pathname={PATH}
-              params={params}
-              name="hep"
-              label="Phạm vi:"
-              current={strictHcm ? '1' : '0'}
-              options={[
-                { value: '0', label: 'HCM mở rộng' },
-                { value: '1', label: 'HCM cũ' },
-              ]}
-            />
-          </div>
+        {/* Cảnh báo thật thà: một bộ lọc gần như không có dữ liệu thì phải nói
+            ra, chứ không để người dùng chọn rồi tự đoán vì sao rỗng. */}
+        {result.inFieldTotal > 0 && result.coverage.saturday / result.inFieldTotal < 0.1 && (
+          <p className="px-1 text-xs text-muted">
+            ⚠ Chỉ <strong>{result.coverage.saturday}</strong> tin nói rõ lịch thứ 7 — phần lớn tin
+            trên VietnamWorks không ghi. Lọc theo cột này sẽ bỏ sót gần hết. Nguồn vieclam24h ghi
+            nhiều hơn (khoảng 22%), nên con số này sẽ khá lên khi kho có thêm tin từ đó.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Chip>chỉ tin còn sống</Chip>
+          {result.provinces.map((province) => (
+            <Chip key={province}>{province}</Chip>
+          ))}
+          {result.maxAgeDays && <Chip>đăng trong {result.maxAgeDays} ngày</Chip>}
+          {!includeWeak && <Chip>chỉ tin khớp chắc</Chip>}
+          {strictHcm && result.droppedByNarrowHcm > 0 && (
+            <Chip>bỏ {result.droppedByNarrowHcm} tin ngoài HCM cũ</Chip>
+          )}
         </div>
 
         {result.items.length === 0 ? (
@@ -236,8 +162,8 @@ export default async function FieldPage({
               </>
             ) : (
               <>
-                Thử gỡ bớt một chip ở thanh lọc phía trên. Nếu nghi từ điển loại oan thì soi bằng{' '}
-                <Cmd>npm run match -- --show reject</Cmd>.
+                Thử nới một ô ở thanh lọc phía trên, hoặc bấm “Xoá lọc”. Nếu nghi từ điển loại oan
+                thì soi bằng <Cmd>npm run match -- --show reject</Cmd>.
               </>
             )}
           </Empty>
@@ -292,13 +218,6 @@ export default async function FieldPage({
     </>
   );
 }
-
-/** Mốc lương, tính bằng VND/tháng. Không đếm được trước nên không mang số tin. */
-const SALARY_STEPS = [
-  { value: '15000000', label: 'từ 15tr', count: 0 },
-  { value: '25000000', label: 'từ 25tr', count: 0 },
-  { value: '40000000', label: 'từ 40tr', count: 0 },
-];
 
 const SATURDAY_TEXT: Record<string, string> = {
   NONE: 'Nghỉ thứ 7',

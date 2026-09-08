@@ -53,10 +53,19 @@ export interface FieldPage {
   maxAgeDays: number | null;
 
   items: FieldMatchedJob[];
+  /** Số tin còn lại SAU KHI áp mọi bộ lọc. */
   total: number;
+  /**
+   * Số tin thuộc ngành TRƯỚC khi áp bộ lọc loại/quận/thứ 7/lương.
+   *
+   * Phải tách khỏi `total`, vì `coverage` bên dưới đếm trên tập này. Ghép nhầm
+   * hai con số của hai tập khác nhau thì ra nhãn kiểu "117/3 tin có" — đúng
+   * kiểu vô nghĩa mà người đọc không có cách nào tự phát hiện.
+   */
+  inFieldTotal: number;
   strong: number;
   weak: number;
-  /** Số tin đã chấm để ra được từng ấy — mẫu số của mọi tỷ lệ trên trang. */
+  /** Số tin đã chấm để ra được từng ấy — mẫu số của "lọt qua từ điển". */
   scanned: number;
   freshlyChecked: number;
   droppedByNarrowHcm: number;
@@ -71,7 +80,10 @@ export interface FieldPage {
     saturday: Facet[];
     experience: Facet[];
   };
-  /** Bao nhiêu tin thuộc ngành có dữ liệu cho từng chiều — để nói thật về độ phủ. */
+  /**
+   * Bao nhiêu tin có dữ liệu cho từng chiều — để nói thật về độ phủ.
+   * Đếm trên `inFieldTotal`, KHÔNG phải trên `total`.
+   */
   coverage: {
     district: number;
     saturday: number;
@@ -198,6 +210,7 @@ export async function findFieldJobs(
 
     items: matched.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     total,
+    inFieldTotal: inField.length,
     strong,
     weak: total - strong,
     scanned: candidates.length,
