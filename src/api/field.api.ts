@@ -49,7 +49,16 @@ export interface FieldPage {
   name: string;
   keywordCount: number;
   excludeCount: number;
+  /** Slug tỉnh/thành của ngành — dùng cho truy vấn, KHÔNG dùng để hiện ra. */
   provinces: string[];
+  /**
+   * Tên tỉnh/thành đọc được, cùng thứ tự với `provinces`.
+   *
+   * Tách riêng vì giao diện từng hiện thẳng slug ("ho-chi-minh") cho người
+   * dùng đọc. Slug là khoá của máy; tra tên là việc của tầng đọc dữ liệu, nơi
+   * đã sẵn có kết nối CSDL, chứ không phải việc của component.
+   */
+  provinceNames: string[];
   maxAgeDays: number | null;
 
   items: FieldMatchedJob[];
@@ -124,18 +133,28 @@ export async function findFieldJobs(
     ? new Date(Date.now() - filter.maxAgeDays * 24 * 60 * 60 * 1000)
     : null;
 
-  const candidates = await db.jobPosting.findMany({
-    where: {
-      status: { in: ALIVE },
-      ...(filter.provinces.length
-        ? { locations: { some: { location: { slug: { in: filter.provinces } } } } }
-        : {}),
-      ...(since ? { postedAt: { gte: since } } : {}),
-      ...(filter.levels.length ? { level: { in: filter.levels } } : {}),
-    },
-    orderBy: { postedAt: 'desc' },
-    include: LIST_INCLUDE,
-  });
+  const [candidates, provinceRows] = await Promise.all([
+    db.jobPosting.findMany({
+      where: {
+        status: { in: ALIVE },
+        ...(filter.provinces.length
+          ? { locations: { some: { location: { slug: { in: filter.provinces } } } } }
+          : {}),
+        ...(since ? { postedAt: { gte: since } } : {}),
+        ...(filter.levels.length ? { level: { in: filter.levels } } : {}),
+      },
+      orderBy: { postedAt: 'desc' },
+      include: LIST_INCLUDE,
+    }),
+    db.location.findMany({
+      where: { slug: { in: filter.provinces } },
+      select: { slug: true, name: true },
+    }),
+  ]);
+
+  // Slug nào chưa có trong bảng Location thì giữ nguyên slug — thà hiện một
+  // chuỗi xấu còn hơn nuốt mất cả tỉnh khỏi dòng "phạm vi".
+  const provinceName = new Map(provinceRows.map((row) => [row.slug, row.name]));
 
   const field = compileField({ keywords: filter.keywords, excludes: filter.excludes });
 
@@ -206,6 +225,7 @@ export async function findFieldJobs(
     keywordCount: filter.keywords.length,
     excludeCount: filter.excludes.length,
     provinces: filter.provinces,
+    provinceNames: filter.provinces.map((slug) => provinceName.get(slug) ?? slug),
     maxAgeDays: filter.maxAgeDays,
 
     items: matched.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),

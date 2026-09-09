@@ -193,7 +193,8 @@ export function extractLocations(jobLocation: unknown): { raw: string; province:
       const locality = clean(str(addr['addressLocality']));
       const street = clean(str(addr['streetAddress']));
       const combined = [street, locality, region].filter(Boolean).join(', ');
-      if (combined) push(combined, region || locality || combined);
+      // Thử LẦN LƯỢT chứ không chỉ ô đầu tiên có chữ — xem chú thích ở `push`.
+      if (combined) push(combined, [region, locality, combined]);
       return;
     }
 
@@ -201,11 +202,33 @@ export function extractLocations(jobLocation: unknown): { raw: string; province:
     if (name) push(name);
   };
 
-  const push = (raw: string, lookupText?: string): void => {
+  /**
+   * `lookup` là DANH SÁCH ứng viên thử theo thứ tự, không phải một chuỗi.
+   *
+   * Vì sao phải thế: schema.org không ép nghĩa cho `addressRegion` và
+   * `addressLocality`, nên mỗi sàn hiểu một kiểu. Đo thật 09/09/2026:
+   *
+   *   ITviec/TopDev  region="Hồ Chí Minh"  locality="Phường Tân Tạo"  (tỉnh ở region)
+   *   CareerViet     region="Quận 5"       locality="Hồ Chí Minh"     (tỉnh ở locality)
+   *
+   * Chỉ tra `region` thì MỌI tin CareerViet ra `province = null`, rơi khỏi bộ
+   * lọc theo tỉnh và biến mất khỏi trang Ngành — im lặng, không một lỗi nào để
+   * lần ra. Thử lần lượt thì sàn đặt tỉnh ở ô nào cũng tìm được, mà nguồn
+   * "thuận" vẫn khớp ngay ở ứng viên đầu nên kết quả cũ không đổi.
+   */
+  const push = (raw: string, lookup?: readonly string[]): void => {
     const clean = normalizeWhitespace(raw);
     if (!clean || seen.has(clean)) return;
     seen.add(clean);
-    results.push({ raw: clean, province: resolveProvince(lookupText ?? clean) });
+
+    let province: Province | null = null;
+    for (const candidate of lookup ?? [clean]) {
+      if (!candidate) continue;
+      province = resolveProvince(candidate);
+      if (province) break;
+    }
+
+    results.push({ raw: clean, province });
   };
 
   visit(jobLocation);

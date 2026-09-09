@@ -318,10 +318,21 @@ const EMPLOYMENT_MAP: Record<string, EmploymentType> = {
   OTHER: EmploymentType.OTHER,
 };
 
+/**
+ * Bóc dấu nháy THỪA mà nguồn để lọt vào giá trị.
+ *
+ * Đo thật ở CareerViet 09/09/2026: `"employmentType": ["\"FULL_TIME\""]` — tức
+ * chuỗi có sẵn hai dấu `"` NẰM TRONG nội dung, dấu hiệu của một lần JSON.
+ * stringify thừa ở phía họ. Không bóc thì khoá tra thành `"FULL_TIME"` và mọi
+ * tin của nguồn đó ra `employmentType = null`.
+ */
 function normalizeEmploymentType(value: unknown): EmploymentType | null {
   const candidates = Array.isArray(value) ? value : [value];
   for (const candidate of candidates) {
-    const key = String(candidate ?? '').toUpperCase().replace(/[\s-]+/g, '_');
+    const key = String(candidate ?? '')
+      .replace(/^[\s"']+|[\s"']+$/g, '')
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_');
     const mapped = EMPLOYMENT_MAP[key];
     if (mapped) return mapped;
   }

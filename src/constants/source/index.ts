@@ -27,6 +27,32 @@ export interface SourceSeed {
   note: string;
 }
 
+/**
+ * Các từ LÕI của nghề thu mua, viết theo dạng nằm trong slug URL.
+ *
+ * Dùng cho `urlIncludePattern` ở những sàn KHÔNG mã hoá ngành vào URL — ở đó
+ * tên tin là tín hiệu duy nhất lọc được trước khi tiêu ngân sách request.
+ *
+ * CỐ Ý chỉ lấy từ LÕI, bỏ hết từ XÁM (`logistics`, `xuat-nhap-khau`,
+ * `kho-van`, `dieu-phoi` — xem `GRAY_PREFIX` ở constants/field). Lý do: từ điển
+ * quy định từ xám không tự kéo tin vào ngành, nên tải chúng về là chắc chắn
+ * tải để rồi vứt. Đo thật 09/09/2026 trên timviec365: thêm nhóm xám vào đây
+ * nâng 156 URL lên 299, tức gần gấp đôi ngân sách cho phần mà từ điển sẽ loại.
+ *
+ * Đo thật 09/09/2026 với đúng mẫu dưới đây:
+ *   timviec365  12.357 URL -> 156 (1,3%)
+ *   careerviet  14.368 URL -> 428 (3,0%)
+ * Cả hai đều lọt trần `maxUrls` (300 × 3 = 900) của một lần chạy.
+ *
+ * vieclam24h CỐ Ý không dùng hằng số này: URL của sàn đó tự khai mã ngành và
+ * mã tỉnh (`c14p122`), nên mẫu của nó có thêm một nhánh bắt được cả tin không
+ * có từ khoá nào trong tên. Gộp vào đây là làm hỏng con số đã đo ghi ở nguồn ấy.
+ */
+const PURCHASE_SLUG =
+  'thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|' +
+  'purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|' +
+  'supplier|vendor|commodity|tender';
+
 export const SOURCE_SEEDS: readonly SourceSeed[] = [
   {
     code: 'vnw',
@@ -205,19 +231,87 @@ export const SOURCE_SEEDS: readonly SourceSeed[] = [
     name: 'CareerViet',
     homeUrl: 'https://careerviet.vn',
     kind: SourceKind.SITEMAP_JSONLD,
-    entryUrl: null,
+    // BẬT LẠI 09/09/2026. Lần khảo sát 25/08 kết luận "không có sitemap dùng
+    // được" — kết luận đó SAI, vì đã thử /sitemap.xml, /sitemap_index.xml,
+    // /vi/sitemap.xml và /sitemap/sitemap-INDEX.xml mà chưa thử đúng địa chỉ
+    // dưới đây. /sitemap/sitemap.xml trả 200 kèm một index 12 file thật.
+    entryUrl: 'https://careerviet.vn/sitemap/sitemap.xml',
+    // /vi/tim-viec-lam/<slug>.35C86620.html
     jobUrlPattern: '/vi/tim-viec-lam/[^/]+\\.\\w+$',
-    priority: 50,
-    config: null,
-    // TẮT. Không tìm được sitemap dùng được — xem note.
-    isActive: false,
+    // Trường dữ liệu giàu thứ nhì sau VietnamWorks — xem note. Đứng trên
+    // TopCV/ITviec/TopDev vì có đủ lương VND, kinh nghiệm và giờ làm việc.
+    priority: 15,
+    config: {
+      externalIdPattern: '\\.([0-9A-F]+)\\.html$',
+      // BẮT BUỘC, hai việc cùng lúc:
+      //  1. bỏ 5 file không phải tin (searchjob/searchresume/employer/...),
+      //  2. bỏ bản dịch trùng — `job_en_*` là CÙNG tin với `job_vi_*`, chỉ khác
+      //     đường dẫn (/en/search-job/ so với /vi/tim-viec-lam/). Nạp cả hai là
+      //     mọi thống kê bị đếm đôi.
+      // Giữ `job_current_date` vì đó là file tin đăng trong ngày (860 URL, gồm
+      // cả hai thứ tiếng — `jobUrlPattern` ở trên lọc nốt bản `en`).
+      sitemapUrlPattern: 'job_(?:vi_|current_date)',
+      // Sàn này KHÔNG mã hoá ngành vào URL, nên chỉ lọc được theo tên tin.
+      // Đo thật 09/09/2026: 14.368 URL /vi/ -> 428 khớp (3,0%).
+      urlIncludePattern: PURCHASE_SLUG,
+    },
+    isActive: true,
     note:
-      'TẮT sau khi kiểm 25/08: /sitemap.xml trả HTTP 404 kèm 1,2 MB body rồi ' +
-      'timeout; /sitemap_index.xml và /vi/sitemap.xml cũng 404; ' +
-      '/sitemap/sitemap-index.xml trả 200 nhưng RỖNG 0 byte; robots.txt không ' +
-      'khai Sitemap nào. Trang danh sách CÓ JobPosting nên nguồn này vẫn dùng ' +
-      'được — nhưng phải qua adapter list-jsonld, để chặng sau. ' +
-      'robots.txt của họ cho phép đích danh Googlebot/GPTBot/ClaudeBot.',
+      'ĐO THẬT 09/09/2026: /sitemap/sitemap.xml -> index 12 file, trong đó ' +
+      'job_vi_0..2 (6.974 URL mỗi file) + job_current_date (860 URL). <lastmod> ' +
+      'là THẬT — 2.256 giá trị khác nhau trên 6.974 URL — nên crawl tăng dần ' +
+      'dùng được, KHÔNG cần ignoreLastmod như vieclam24h. ' +
+      'JSON-LD giàu nhất trong nhóm sitemap: baseSalary VND có min/max, ' +
+      'validThrough, experienceRequirements.monthsOfExperience, industry ' +
+      '("Thu mua / Vật tư" — khớp thẳng bảng chia loại), và workHours ' +
+      '("Thứ2-Thứ6(08:00-17:30)") tức cột lịch thứ 7 sẽ có dữ liệu thật. ' +
+      'robots.txt CHO PHÉP đích danh ClaudeBot/GPTBot/Googlebot; nhánh /vi/ ' +
+      'tim-viec-lam/ không bị cấm (nhưng /en/tim-viec-lam/ và /vi/jobs/ thì CÓ ' +
+      '— thêm một lý do chỉ đi nhánh vi). ' +
+      'HAI BẪY đã phải vá ở parser, đừng gỡ: (1) sàn đảo addressRegion và ' +
+      'addressLocality — region là QUẬN ("Quận 5"), locality mới là TỈNH — nên ' +
+      'extractLocations phải thử lần lượt, không thì mọi tin ra province null ' +
+      'và biến mất khỏi trang Ngành; (2) employmentType trả ["\\"FULL_TIME\\""] ' +
+      'có dấu nháy thừa nằm trong chuỗi.',
+  },
+  {
+    code: 'timviec365',
+    name: 'Tìm Việc 365',
+    homeUrl: 'https://timviec365.vn',
+    kind: SourceKind.SITEMAP_JSONLD,
+    entryUrl: 'https://timviec365.vn/sitemap.xml',
+    // /<slug>-p2070117.html — tin nằm ngay ở gốc, không có đoạn đường dẫn riêng.
+    jobUrlPattern: '/[a-z0-9-]+-p\\d+\\.html$',
+    priority: 45,
+    config: {
+      externalIdPattern: '-p(\\d+)\\.html$',
+      // Index có 40 file: blog, mẫu CV, biểu mẫu, danh mục theo tỉnh/quận,
+      // công ty... Tin chỉ nằm ở 8 file `sitemap-job-*` (job-1..7 + job-new).
+      sitemapUrlPattern: 'sitemap-job-',
+      // Đo thật 09/09/2026: 12.357 URL -> 156 khớp (1,3%).
+      urlIncludePattern: PURCHASE_SLUG,
+    },
+    isActive: true,
+    note:
+      'ĐO THẬT 09/09/2026: sitemap.xml là index 40 file -> sitemap-job-1..7 ' +
+      '(2.000 URL mỗi file) + sitemap-job-new (24 tin mới nhất), tổng 12.357 ' +
+      'URL tin. <lastmod> THẬT ở mức từng tin — 1.996 giá trị khác nhau trên ' +
+      '2.000 URL — nên crawl tăng dần chạy đúng. ' +
+      'JSON-LD JobPosting đầy đủ: baseSalary VND min/max unitText MONTH, ' +
+      'datePosted, validThrough, industry + occupationalCategory, ' +
+      'identifier.value = đúng id trong URL. ' +
+      'robots.txt cởi mở: Allow / cho *, chỉ chặn khu admin/ajax/CV/ứng viên. ' +
+      'Trang chi tiết SSR, Node fetch đọc được 200 (214 KB) — KHÔNG bị chặn ' +
+      'dấu vân tay TLS như TopCV. ' +
+      'Lưu ý: slug bỏ dấu theo kiểu riêng ("đ" -> "dj", ví dụ "ky-su-djien"), ' +
+      'nên đừng dựa vào slug để đoán nội dung; chỉ dùng nó để lọc URL. ' +
+      'BẪY ĐÁNG KỂ NHẤT — `datePosted` ở đây là ngày ĐĂNG LẦN ĐẦU, không phải ' +
+      'ngày gia hạn: đo thật có tin datePosted 2022-02-11 mà validThrough ' +
+      '2026-09-12, tức tin cũ được nhà tuyển dụng gia hạn liên tục. Hệ quả: ' +
+      'bộ lọc `maxAgeDays` của SavedFilter (đang để 90 ngày) sẽ loại phần lớn ' +
+      'kho cũ của nguồn này và chỉ giữ tin trong `sitemap-job-new`. Đó là hành ' +
+      'vi ĐÚNG cho câu hỏi "tin nào mới", nhưng nếu muốn cả tin gia hạn thì ' +
+      'phải nới maxAgeDays, chứ đừng sửa parser để nói dối ngày đăng.',
   },
 ];
 
@@ -230,5 +324,53 @@ export const REJECTED_SOURCES: readonly { name: string; reason: string }[] = [
   { name: 'LinkedIn', reason: 'reCAPTCHA enterprise ngay ở robots.txt' },
   { name: 'Indeed VN', reason: 'Điều khoản sử dụng cấm cào rõ ràng' },
   { name: 'Glints VN', reason: 'Không có JSON-LD; dữ liệu nằm trong __NEXT_DATA__ — để giai đoạn 2' },
-  { name: 'mywork / 123job', reason: 'Danh sách render bằng JS, chưa tìm được sitemap job riêng' },
+
+  // ── Khảo sát 09/09/2026, đo bằng Node fetch với đúng User-Agent của ta ─────
+  {
+    name: 'mywork.com.vn',
+    reason:
+      'ĐO LẠI 09/09: robots.txt CHO PHÉP (Allow: / cho *), nhưng /sitemap.xml trả ' +
+      'HTTP 200 với 1,26 MB HTML của ứng dụng Next.js chứ không phải XML — tức ' +
+      'không có sitemap, chỉ có route bắt-tất-cả. Muốn dùng phải qua list-jsonld.',
+  },
+  {
+    name: '123job.vn',
+    reason:
+      'ĐO LẠI 09/09: robots.txt rất thoáng và CÓ khai sitemap, nhưng ' +
+      '/sitemap.xml là <sitemapindex> RỖNG — 125 byte, không một <loc> nào.',
+  },
+  {
+    name: 'job3s.ai (job3s.vn)',
+    reason:
+      'robots.txt kết thúc bằng "Disallow: /*" cho user-agent *, tức cấm toàn bộ. ' +
+      'Có khai Sitemap nhưng lời cấm mới là thứ phải nghe.',
+  },
+  {
+    name: 'CareerLink',
+    reason:
+      'robots.txt cấm ĐÍCH DANH ClaudeBot, Claude-Web, anthropic-ai, GPTBot và ' +
+      'meta-externalagent bằng "Disallow: /". Nhóm * chỉ bị chặn vài trang lọc, ' +
+      'nên về mặt kỹ thuật UA của ta lọt — nhưng ý của toà soạn đã quá rõ: họ ' +
+      'không muốn công cụ AI đọc trang. CỐ Ý không lách bằng cách đổi tên bot.',
+  },
+  {
+    name: 'Việc Làm Tốt (Chợ Tốt)',
+    reason:
+      'Cùng lý do CareerLink: robots.txt liệt kê ClaudeBot/anthropic-ai/GPTBot ' +
+      'trong nhóm "Block AI training crawlers" với Disallow: /. Thêm nữa ' +
+      'sitemap-index.xml trả HTTP 403 cho Node fetch.',
+  },
+  {
+    name: 'JobOKO',
+    reason:
+      'robots.txt cho phép trang tin, nhưng không tìm được sitemap: /sitemap.xml, ' +
+      '/sitemap-index.xml, /sitemap_index.xml, /sitemaps.xml đều 404 và robots ' +
+      'không khai Sitemap nào. Là sàn tổng hợp lại tin của sàn khác nên độ ưu ' +
+      'tiên thấp — trùng lặp cao mà nguồn gốc thì đã có sẵn.',
+  },
+  {
+    name: 'HR1Jobs / JobStreet VN / vieclam.thanhnien.vn',
+    reason: 'Node fetch không kết nối được tới robots.txt (fetch failed / DNS) 09/09.',
+  },
+  { name: 'freec.asia', reason: 'robots.txt trả HTTP 429 ngay lần gọi đầu — nguồn đang giới hạn gắt.' },
 ];

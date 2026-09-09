@@ -157,6 +157,39 @@ describe('địa danh', () => {
     expect(locations[0]?.province?.slug).toBe('ha-noi');
     expect(locations[0]?.raw).not.toContain('Not Available');
   });
+
+  // CareerViet đảo hai ô so với mọi sàn khác: addressRegion là QUẬN, còn tỉnh
+  // nằm ở addressLocality. Chỉ tra addressRegion thì "Quận 5" không ra tỉnh
+  // nào, tin ra province = null, rơi khỏi bộ lọc tỉnh và biến mất khỏi trang
+  // Ngành — im lặng, không một lỗi nào để lần ra. Đo thật 09/09/2026.
+  it('tìm được tỉnh cả khi sàn ĐẢO addressRegion/addressLocality (CareerViet)', () => {
+    const locations = extractLocations({
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Số 3 Trần Nhân Tôn, phường 9, quận 5, TP.HCM',
+        addressRegion: 'Quận 5',
+        addressLocality: 'Hồ Chí Minh',
+        addressCountry: 'VN',
+      },
+    });
+    expect(locations[0]?.province?.slug).toBe('ho-chi-minh');
+  });
+
+  it('vẫn ưu tiên addressRegion khi ô đó ĐÚNG là tỉnh', () => {
+    // Bảo hiểm cho cách sửa ở trên: nguồn "thuận" phải khớp ngay ứng viên đầu,
+    // chứ không được rơi xuống chuỗi gộp rồi vớ phải một tên tỉnh khác trong
+    // địa chỉ đường phố.
+    const locations = extractLocations({
+      '@type': 'Place',
+      address: {
+        addressRegion: 'Hồ Chí Minh',
+        addressLocality: 'Phường Tân Tạo',
+        streetAddress: 'KCN Tân Tạo',
+      },
+    });
+    expect(locations[0]?.province?.slug).toBe('ho-chi-minh');
+  });
 });
 
 describe('normalizeJobPosting trên dữ liệu THẬT của ba sàn', () => {
@@ -200,6 +233,23 @@ describe('normalizeJobPosting trên dữ liệu THẬT của ba sàn', () => {
     expect(job.skillTexts).toContain('Python');
     expect(job.skillTexts).toContain('C++');
     expect(job.skillTexts).toContain('Docker');
+    expect(job.employmentType).toBe('FULL_TIME');
+  });
+
+  // Đo thật ở CareerViet 09/09/2026: `"employmentType": ["\"FULL_TIME\""]` —
+  // dấu nháy nằm TRONG nội dung chuỗi, dấu hiệu một lần JSON.stringify thừa ở
+  // phía họ. Không bóc thì khoá tra thành `"FULL_TIME"` và cả nguồn ra null.
+  it('CareerViet: employmentType có dấu nháy thừa vẫn đọc được', () => {
+    const { posting } = validateJobPosting({
+      '@type': 'JobPosting',
+      title: 'Purchasing Staff',
+      description: 'x',
+      datePosted: '2026-09-09',
+      hiringOrganization: { '@type': 'Organization', name: 'Vietmap' },
+      jobLocation: { address: { addressRegion: 'Hồ Chí Minh' } },
+      employmentType: ['"FULL_TIME"'],
+    });
+    const job = normalizeJobPosting(posting!, ctx('https://careerviet.vn/vi/tim-viec-lam/a.1A.html'));
     expect(job.employmentType).toBe('FULL_TIME');
   });
 

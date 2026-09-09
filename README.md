@@ -139,16 +139,44 @@ JSON-LD gốc trên blob store, nên sửa parser rồi chạy lệnh này là t
 
 ---
 
-## Tình trạng 6 nguồn — đã chạy thật 25/08/2026
+## Tình trạng 7 nguồn — đã chạy thật 25/08 và 09/09/2026
 
 | Nguồn | Trạng thái | Đo được |
 |---|---|---|
 | **VietnamWorks** | ✅ chạy | 1 request → 50 tin đầy đủ |
+| **CareerViet** | ✅ chạy | **Bật lại 09/09.** `/sitemap/sitemap.xml` → 12 file con; `job_vi_0..2` (6.974 URL/file) + `job_current_date` (860). `lastmod` thật — 2.256 giá trị khác nhau trên 6.974 URL |
 | **TopDev** | ✅ chạy | 5 request, 9,4s. Cần `sitemapUrlPattern` — index có 257 file `_en` + 257 file `_vi` chứa **cùng** tập tin |
 | **ITviec** | ✅ chạy | 847 URL ở `jobs_desc_en`. **Bắt buộc** `sitemapUrlPattern`: file tin nằm cuối trong 13 file, bốn file đầu là danh mục công ty nặng 17 MB |
 | **vieclam24h** | ✅ chạy | `daily/job-0.xml` → `job/tintuyendung-N.xml` |
+| **Tìm Việc 365** | ✅ chạy | **Mới 09/09.** `sitemap.xml` → 40 file, tin nằm ở `sitemap-job-1..7` + `job-new`, tổng 12.357 URL. `lastmod` thật ở mức từng tin |
 | **TopCV** | ⛔ tắt | **Chặn ở tầng dấu vân tay TLS.** Xem bên dưới |
-| **CareerViet** | ⛔ tắt | Không có sitemap dùng được: `/sitemap.xml` 404 kèm 1,2 MB body; `/sitemap/sitemap-index.xml` trả 200 nhưng **rỗng 0 byte**; robots.txt không khai sitemap nào |
+
+Hai nguồn mới đều **nhắm mục tiêu bằng `urlIncludePattern`** như vieclam24h,
+vì cả hai đều lớn hơn ngân sách một lần chạy. Đo thật 09/09: CareerViet
+14.368 URL `/vi/` → 428 khớp nghề thu mua (3,0%); Tìm Việc 365 12.357 → 156
+(1,3%). Mẫu chỉ chứa từ **lõi** của từ điển, cố ý bỏ nhóm từ xám
+(`logistics`, `xuat-nhap-khau`, `kho-van`) — từ xám không tự kéo tin vào ngành
+nên tải chúng về là chắc chắn tải để rồi vứt.
+
+### Vì sao CareerViet bật lại được
+
+Kết luận "không có sitemap dùng được" hồi 25/08 **sai**, và sai vì thiếu đúng
+một phép thử. Lần đó đã thử `/sitemap.xml` (404), `/sitemap_index.xml` (404),
+`/vi/sitemap.xml` (404) và `/sitemap/sitemap-**index**.xml` (200 nhưng rỗng 0
+byte) — nhưng chưa thử `/sitemap/sitemap.xml`, và đó mới là địa chỉ thật. Bài
+học: một sàn trả 200-rỗng ở đường dẫn *gần đúng* thì đừng dừng lại, vì chính
+nó chứng tỏ thư mục `sitemap/` có tồn tại.
+
+JSON-LD của họ giàu trường nhất trong nhóm sitemap: lương VND có min/max,
+`monthsOfExperience`, `industry` khớp thẳng bảng chia loại mua hàng, và
+`workHours` — nguồn đầu tiên cho cột "lịch thứ 7" dữ liệu thật.
+
+Hai bẫy đã phải vá ở parser (đã có test chặn hồi quy, đừng gỡ):
+
+1. Sàn này **đảo** `addressRegion` và `addressLocality`: `region` là *quận*
+   ("Quận 5"), `locality` mới là *tỉnh*. Trước khi vá, mọi tin CareerViet ra
+   `province = null` rồi biến mất khỏi trang Ngành — im lặng, không lỗi nào.
+2. `employmentType` trả `["\"FULL_TIME\""]`, dấu nháy nằm *trong* chuỗi.
 
 ### TopCV — cần anh quyết
 
