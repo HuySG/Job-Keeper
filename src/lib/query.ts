@@ -19,13 +19,32 @@
 export type SearchParams = Record<string, string | string[] | undefined>;
 
 /**
- * Một tham số có thể tới hai lần (`?level=A&level=B`). Cả ứng dụng chỉ dùng
- * giá trị đơn, nên lấy cái đầu tiên thay vì để lọt một mảng vào chỗ chờ chuỗi.
+ * Một tham số có thể tới hai lần (`?level=A&level=B`). Hàm này CỐ Ý chỉ lấy
+ * giá trị đầu — dùng cho những chiều chỉ có một giá trị (trang, lương tối
+ * thiểu, cờ bật/tắt). Chiều chọn được nhiều thì dùng `readParams`.
  */
 export function readParam(params: SearchParams, key: string): string | undefined {
   const raw = params[key];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return value === '' ? undefined : value;
+}
+
+/**
+ * MỌI giá trị của một tham số, cho bộ lọc chọn được nhiều.
+ *
+ * `?loai=san-xuat&loai=det-may` -> `['san-xuat', 'det-may']`. Đây là dạng mà
+ * một `<form method="get">` với nhiều `<input type="checkbox">` cùng `name`
+ * sinh ra, nên bộ lọc nhiều lựa chọn không cần một dòng JavaScript nào.
+ *
+ * Trả mảng RỖNG khi không có, không phải `undefined`: chỗ gọi luôn lặp được mà
+ * không phải kiểm tra null, và "không lọc" với "lọc bằng danh sách rỗng" là
+ * cùng một thứ.
+ */
+export function readParams(params: SearchParams, key: string): string[] {
+  const raw = params[key];
+  if (raw === undefined) return [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.filter((value): value is string => typeof value === 'string' && value !== '');
 }
 
 /** Số hợp lệ hoặc `undefined`. `?page=abc` phải rơi về mặc định, không phải NaN. */
@@ -41,8 +60,11 @@ export function readFlag(params: SearchParams, key: string): boolean {
   return readParam(params, key) === '1';
 }
 
-/** `undefined` trong `overrides` nghĩa là XOÁ tham số đó. */
-export type Overrides = Record<string, string | number | undefined>;
+/**
+ * `undefined` trong `overrides` nghĩa là XOÁ tham số đó.
+ * Mảng nghĩa là ghi NHIỀU giá trị cho cùng một tên; mảng rỗng cũng là xoá.
+ */
+export type Overrides = Record<string, string | number | readonly string[] | undefined>;
 
 /**
  * Dựng URL mới từ URL hiện tại.
@@ -58,12 +80,21 @@ export function buildUrl(pathname: string, params: SearchParams, overrides: Over
   for (const key of Object.keys(params)) {
     if (key in overrides) continue;
     if (key === 'page' && !changesPage) continue;
-    const value = readParam(params, key);
-    if (value) query.set(key, value);
+    // `append` từng giá trị, KHÔNG phải `set` giá trị đầu: bộ lọc chọn nhiều
+    // gửi lên `?loai=a&loai=b`, mà bản cũ dùng `readParam` nên mỗi lần dựng
+    // lại URL — bấm sang trang 2, gỡ một chip khác — là lặng lẽ vứt mất mọi
+    // giá trị trừ cái đầu tiên. Người dùng chọn ba loại, sang trang 2 còn một.
+    for (const value of readParams(params, key)) query.append(key, value);
   }
 
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined || value === '') continue;
+
+    if (Array.isArray(value)) {
+      for (const item of value) if (item !== '') query.append(key, item);
+      continue;
+    }
+
     const text = String(value);
     // Trang 1 là mặc định — để `?page=1` trong URL chỉ làm liên kết dài ra.
     if (key === 'page' && text === '1') continue;
@@ -74,9 +105,47 @@ export function buildUrl(pathname: string, params: SearchParams, overrides: Over
   return search ? `${pathname}?${search}` : pathname;
 }
 
-/** URL hiện tại nhưng bỏ đúng một tham số. Dùng cho nút × trên mỗi chip lọc. */
+/** URL hiện tại nhưng bỏ đúng một tham số (mọi giá trị của nó). */
 export function urlWithout(pathname: string, params: SearchParams, key: string): string {
   return buildUrl(pathname, params, { [key]: undefined });
+}
+
+/**
+ * Bỏ ĐÚNG MỘT GIÁ TRỊ khỏi một bộ lọc chọn nhiều, giữ nguyên các giá trị còn lại.
+ *
+ * Đây là thứ nút × trên chip cần khi một chiều mang nhiều giá trị: đang lọc
+ * "Sản xuất, Dệt may" mà bấm × trên "Dệt may" thì phải còn lại "Sản xuất", chứ
+ * không phải mất cả hai. `urlWithout` xoá cả tham số nên chỉ đúng cho chiều
+ * đơn giá trị.
+ */
+export function urlWithoutValue(
+  pathname: string,
+  params: SearchParams,
+  key: string,
+  value: string,
+): string {
+  const rest = readParams(params, key).filter((item) => item !== value);
+  return buildUrl(pathname, params, { [key]: rest.length ? rest : undefined });
+}
+
+/**
+ * Bật/tắt một giá trị trong bộ lọc chọn nhiều.
+ *
+ * Dùng cho những chỗ vừa HIỂN THỊ số vừa là chỗ BẤM để lọc — như bảng chia
+ * loại. Bấm vào dòng chưa chọn thì thêm; bấm lại đúng dòng đang chọn thì bỏ,
+ * nếu không thì dòng đang sáng trở thành một liên kết không làm gì cả.
+ */
+export function urlToggleValue(
+  pathname: string,
+  params: SearchParams,
+  key: string,
+  value: string,
+): string {
+  const current = readParams(params, key);
+  const next = current.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...current, value];
+  return buildUrl(pathname, params, { [key]: next.length ? next : undefined });
 }
 
 /**

@@ -3,8 +3,20 @@ import 'server-only';
 import { db } from '@/api/db';
 import { LIST_INCLUDE, PAGE_SIZE, type JobListItem } from '@/api/job.api';
 import { JobStatus, SaturdayWork } from '@/enums';
+import {
+  EXPERIENCE_BANDS,
+  FACET_NONE,
+  SALARY_BANDS,
+  experienceBandOf,
+  salaryBandOf,
+  salaryValue,
+} from '@/lib/field-bands';
 import { compileField, isNarrowHcm, matchJob, type MatchResult } from '@/lib/field-match';
 import { classifyPurchase, type PurchaseTypeResult } from '@/lib/purchase-type';
+
+// Bảng khoảng lọc nằm ở `lib/field-bands` (không có `server-only`) để giao
+// diện tra được nhãn; xuất lại ở đây cho chỗ gọi cũ khỏi phải biết chuyện đó.
+export { EXPERIENCE_BANDS, FACET_NONE, SALARY_BANDS, salaryValue } from '@/lib/field-bands';
 
 /**
  * Đọc tin theo "ngành của tôi" — bộ lọc do người dùng định nghĩa, lưu trong
@@ -88,7 +100,28 @@ export interface FieldPage {
     districts: Facet[];
     saturday: Facet[];
     experience: Facet[];
+    salary: Facet[];
   };
+
+  /**
+   * Thống kê của tập ĐANG XEM (sau bộ lọc), không phải của cả ngành.
+   * Giao diện phải ghi mẫu số kèm theo, nếu không hai con số của hai tập khác
+   * nhau đứng cạnh nhau là đọc sai ngay.
+   */
+  stats: {
+    /** VND/tháng, trung vị trên số tin CÓ ghi lương. `null` khi chưa tin nào ghi. */
+    salaryMedian: number | null;
+    salaryCount: number;
+    topCompanies: Facet[];
+    sources: Facet[];
+    levels: Facet[];
+  };
+
+  /**
+   * Lọc ra 0 tin thì bỏ chiều nào sẽ có lại bao nhiêu tin. Rỗng khi còn kết quả.
+   * Xem `relaxHints`.
+   */
+  relax: Facet[];
   /**
    * Bao nhiêu tin có dữ liệu cho từng chiều — để nói thật về độ phủ.
    * Đếm trên `inFieldTotal`, KHÔNG phải trên `total`.
@@ -104,6 +137,7 @@ export interface FieldPage {
   pageCount: number;
 }
 
+
 export interface FieldQuery {
   page?: number;
   /** false = chỉ hiện tin "nhận chắc" (từ nhận nằm ở TIÊU ĐỀ). */
@@ -111,15 +145,21 @@ export interface FieldQuery {
   /** true = bỏ tin ở Bình Dương / Bà Rịa – Vũng Tàu (phần sáp nhập 2025). */
   strictHcm?: boolean;
 
-  /** Slug loại mua hàng — xem `constants/purchase`. */
-  purchaseType?: string;
-  district?: string;
-  /** Chỉ lấy tin đòi TỐI ĐA ngần này năm kinh nghiệm. */
-  maxYears?: number;
-  /** Chỉ lấy tin KHÔNG phải làm thứ Bảy (NONE), hoặc một giá trị cụ thể. */
-  saturday?: string;
-  /** VND/tháng. */
-  salaryMin?: number;
+  /**
+   * Bốn chiều dưới đây đều là **chọn nhiều**. Quy ước ở khắp nơi:
+   * nhiều giá trị TRONG một chiều là HOẶC, giữa các chiều là VÀ.
+   * Mảng rỗng = không lọc chiều đó.
+   *
+   * "Sản xuất HOẶC Dệt may" VÀ "Quận 7 HOẶC Bình Tân" — đó là cách người ta
+   * thật sự đi tìm việc, và là lý do bản một-giá-trị cũ bắt phải tìm ba lượt.
+   */
+  purchaseTypes?: readonly string[];
+  districts?: readonly string[];
+  saturdays?: readonly string[];
+  /** Khoảng kinh nghiệm — xem `EXPERIENCE_BANDS`. */
+  experience?: readonly string[];
+  /** Khoảng lương — xem `SALARY_BANDS`. */
+  salary?: readonly string[];
 }
 
 export async function findFieldJobs(
@@ -180,25 +220,47 @@ export async function findFieldJobs(
   // người dùng không còn đường quay lại — lỗi kinh điển của giao diện lọc.
   const facets = {
     purchaseTypes: countBy(
-      inField.filter((r) => keep(r, query, 'purchaseType')),
+      inField.filter((r) => keep(r, query, 'purchaseTypes')),
       (r) => [r.purchase.slug, r.purchase.label, r.purchase.hint],
     ),
+    // Quận và lịch thứ 7 nay có thêm ô "Tin không ghi" thay vì bị bỏ qua bằng
+    // `null` — xem `FACET_NONE`. Nhờ vậy con số trong các ô cộng lại đúng bằng
+    // tổng số tin, tức là nhìn bảng lọc là kiểm được nó có bỏ sót gì không.
     districts: countBy(
-      inField.filter((r) => keep(r, query, 'district')),
-      (r) => (r.job.district ? [r.job.district, r.job.district] : null),
+      inField.filter((r) => keep(r, query, 'districts')),
+      (r) => (r.job.district ? [r.job.district, r.job.district] : [FACET_NONE, 'Tin không ghi quận']),
     ),
     saturday: countBy(
-      inField.filter((r) => keep(r, query, 'saturday')),
-      (r) => (r.job.saturdayWork ? [r.job.saturdayWork, SATURDAY_LABELS[r.job.saturdayWork] ?? r.job.saturdayWork] : null),
+      inField.filter((r) => keep(r, query, 'saturdays')),
+      (r) =>
+        r.job.saturdayWork
+          ? [r.job.saturdayWork, SATURDAY_LABELS[r.job.saturdayWork] ?? r.job.saturdayWork]
+          : [FACET_NONE, 'Tin không ghi'],
     ),
-    experience: countExperience(inField.filter((r) => keep(r, query, 'maxYears'))),
+    experience: countBands(
+      inField.filter((r) => keep(r, query, 'experience')),
+      EXPERIENCE_BANDS,
+      (r) => experienceBandOf(r.job.yearsExpMin),
+    ),
+    salary: countBands(
+      inField.filter((r) => keep(r, query, 'salary')),
+      SALARY_BANDS,
+      (r) => salaryBandOf(r.job),
+    ),
   };
 
+  // Độ phủ phải dùng ĐÚNG luật mà ô lọc bên cạnh dùng, nếu không hai con số
+  // đứng cạnh nhau lại đá nhau. Hai chỗ từng lệch:
+  //   · kinh nghiệm: coverage nhận cả tin chỉ có `yearsExpMax`, còn khoảng lọc
+  //     cắt theo `yearsExpMin` — nên tin đó vừa được đếm là "có ghi" vừa rơi
+  //     vào ô "Tin không ghi".
+  //   · lương: `salaryIsPublic` bật nhưng cả min lẫn max đều rỗng thì
+  //     `salaryValue` trả null và tin rơi vào ô "Thoả thuận".
   const coverage = {
     district: inField.filter((r) => r.job.district !== null).length,
     saturday: inField.filter((r) => r.job.saturdayWork !== null).length,
-    experience: inField.filter((r) => r.job.yearsExpMin !== null || r.job.yearsExpMax !== null).length,
-    salary: inField.filter((r) => r.job.salaryIsPublic).length,
+    experience: inField.filter((r) => r.job.yearsExpMin !== null).length,
+    salary: inField.filter((r) => salaryValue(r.job) !== null).length,
   };
 
   // ── Bước 3: áp bộ lọc rồi mới cắt trang ────────────────────────────────────
@@ -219,6 +281,20 @@ export async function findFieldJobs(
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, Math.trunc(query.page ?? 1)), pageCount);
 
+  // ── Bước 4: thống kê ───────────────────────────────────────────────────────
+  //
+  // Tính trên `matched` (tập ĐANG XEM) chứ không trên `inField`: người dùng lọc
+  // xong thì câu hỏi đổi từ "ngành này thế nào" sang "chỗ tôi đang nhắm thế
+  // nào" — lương trung vị của 12 tin ở Quận 7 mới là con số đáng đọc, chứ
+  // không phải trung vị của cả ngành. Giao diện ghi rõ mẫu số để khỏi nhầm.
+  const stats = {
+    salaryMedian: median(matched.map((r) => salaryValue(r.job)).filter((v): v is number => v !== null)),
+    salaryCount: matched.filter((r) => r.job.salaryIsPublic).length,
+    topCompanies: countBy(matched, (r) => [r.job.company.name, r.job.company.name]).slice(0, 8),
+    sources: countBy(matched, (r) => [r.job.source.name, r.job.source.name]),
+    levels: countBy(matched, (r) => (r.job.level ? [r.job.level, LEVEL_LABELS[r.job.level] ?? r.job.level] : [FACET_NONE, 'Không ghi cấp bậc'])),
+  };
+
   return {
     slug: filter.slug,
     name: filter.name,
@@ -238,6 +314,8 @@ export async function findFieldJobs(
     droppedByNarrowHcm,
     facets,
     coverage,
+    stats,
+    relax: total === 0 ? relaxHints(inField, query) : [],
 
     page,
     pageCount,
@@ -245,41 +323,91 @@ export async function findFieldJobs(
 }
 
 /**
+ * Trung vị, KHÔNG phải trung bình.
+ *
+ * Lương là phân bố lệch phải: vài tin giám đốc 150 triệu kéo trung bình lên
+ * trên mức mà phần lớn người đọc thật sự gặp. Trung vị nói đúng "một nửa số
+ * tin nằm dưới mức này".
+ */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2) : (sorted[mid] ?? null);
+}
+
+const LEVEL_LABELS: Record<string, string> = {
+  INTERN: 'Thực tập',
+  FRESHER: 'Mới ra trường',
+  JUNIOR: 'Junior',
+  MID: 'Middle',
+  SENIOR: 'Senior',
+  LEAD: 'Trưởng nhóm',
+  MANAGER: 'Quản lý',
+};
+
+/**
  * Tin có lọt qua bộ lọc không.
  *
  * `except` cho phép bỏ qua đúng một chiều — dùng khi đếm facet của chính chiều
  * đó, để các lựa chọn còn lại vẫn hiện số thật thay vì 0.
  */
-function keep(
-  row: FieldMatchedJob,
-  query: FieldQuery,
-  except: 'purchaseType' | 'district' | 'saturday' | 'maxYears' | null,
-): boolean {
+export type FieldDimension = 'purchaseTypes' | 'districts' | 'saturdays' | 'experience' | 'salary';
+
+function keep(row: FieldMatchedJob, query: FieldQuery, except: FieldDimension | null): boolean {
   const { job } = row;
 
-  if (except !== 'purchaseType' && query.purchaseType && row.purchase.slug !== query.purchaseType) {
-    return false;
-  }
-  if (except !== 'district' && query.district && job.district !== query.district) return false;
-  if (except !== 'saturday' && query.saturday && job.saturdayWork !== query.saturday) return false;
+  // Một chiều chỉ lọc khi có ít nhất một ô được tích; nhiều ô là HOẶC.
+  // `FACET_NONE` làm cho "tin không ghi" trở thành một giá trị bình thường,
+  // nên không còn nhánh đặc biệt nào ẩn trong hàm này nữa.
+  const on = (dim: FieldDimension, value: string): boolean => {
+    if (except === dim) return true;
+    const chosen = query[dim];
+    if (!chosen || chosen.length === 0) return true;
+    return chosen.includes(value);
+  };
 
-  if (except !== 'maxYears' && query.maxYears !== undefined) {
-    // Tin không ghi kinh nghiệm thì GIỮ LẠI. Loại chúng đi là vứt 7% số tin vì
-    // một điều mà nhà tuyển dụng chỉ đơn giản là không viết ra.
-    const required = job.yearsExpMin;
-    if (required !== null && required > query.maxYears) return false;
-  }
+  return (
+    on('purchaseTypes', row.purchase.slug) &&
+    on('districts', job.district ?? FACET_NONE) &&
+    on('saturdays', job.saturdayWork ?? FACET_NONE) &&
+    on('experience', experienceBandOf(job.yearsExpMin)) &&
+    on('salary', salaryBandOf(job))
+  );
+}
 
-  if (query.salaryMin) {
-    // "Tới 30tr" có salaryMin null nhưng salaryMax 30tr — vẫn phải lọt bộ lọc
-    // "từ 20tr". Tin thoả thuận thì giữ, vì loại chúng là bỏ 75% số tin.
-    if (job.salaryIsPublic) {
-      const best = Math.max(job.salaryMin ?? 0, job.salaryMax ?? 0);
-      if (best < query.salaryMin) return false;
-    }
-  }
+/** Chiều nào đang được lọc, kèm tên đọc được — dùng cho gợi ý nới lọc. */
+const DIMENSION_LABELS: Record<FieldDimension, string> = {
+  purchaseTypes: 'Loại mua hàng',
+  districts: 'Quận / khu',
+  saturdays: 'Lịch thứ 7',
+  experience: 'Kinh nghiệm',
+  salary: 'Lương',
+};
 
-  return true;
+/**
+ * Khi lọc ra 0 tin: bỏ chiều nào thì được bao nhiêu tin?
+ *
+ * Đây là phần thứ hai của việc **tránh lọc sót**. Một danh sách rỗng tự nó
+ * không nói được lỗi nằm ở đâu: người dùng tích năm ô ở bốn chiều rồi phải tự
+ * đoán ô nào giết hết kết quả, thường là gỡ bừa từng cái. Ở đây ta tính hộ —
+ * thử bỏ từng chiều một rồi đếm lại — và chỉ nêu những chiều thật sự cứu được
+ * kết quả, xếp theo số tin thu về.
+ */
+function relaxHints(inField: FieldMatchedJob[], query: FieldQuery): Facet[] {
+  const active = (Object.keys(DIMENSION_LABELS) as FieldDimension[]).filter(
+    (dim) => (query[dim]?.length ?? 0) > 0,
+  );
+  if (active.length < 1) return [];
+
+  return active
+    .map((dim) => ({
+      value: dim,
+      label: DIMENSION_LABELS[dim],
+      count: inField.filter((row) => keep(row, { ...query, [dim]: [] }, null)).length,
+    }))
+    .filter((hint) => hint.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 const SATURDAY_LABELS: Record<string, string> = {
@@ -289,23 +417,44 @@ const SATURDAY_LABELS: Record<string, string> = {
   [SaturdayWork.FULL]: 'Làm cả thứ 7',
 };
 
-/** Các mốc kinh nghiệm. Cắt theo cách người đi làm tự mô tả mình. */
-const EXPERIENCE_STEPS: readonly { value: number; label: string }[] = [
-  { value: 0, label: 'Không đòi kinh nghiệm' },
-  { value: 1, label: 'Tối đa 1 năm' },
-  { value: 3, label: 'Tối đa 3 năm' },
-  { value: 5, label: 'Tối đa 5 năm' },
-];
-
-function countExperience(rows: FieldMatchedJob[]): Facet[] {
-  return EXPERIENCE_STEPS.map((step) => ({
-    value: String(step.value),
-    label: step.label,
-    count: rows.filter((r) => {
-      const required = r.job.yearsExpMin;
-      return required === null || required <= step.value;
-    }).length,
-  })).filter((facet) => facet.count > 0);
+/**
+ * Khoảng kinh nghiệm — **rời nhau**, không chồng lấn.
+ *
+ * Đổi hẳn cách cắt so với bản trước, và đây là thay đổi có hệ quả nên phải nói
+ * rõ. Bản trước là bốn ngưỡng CỘNG DỒN ("tối đa 1 năm", "tối đa 3 năm"…), tức
+ * mỗi ô đã bao trùm mọi ô nhỏ hơn. Hai hệ quả xấu:
+ *
+ *   · Chọn nhiều ô trở nên vô nghĩa — "tối đa 1" HOẶC "tối đa 5" thì đúng bằng
+ *     "tối đa 5". Không cắt rời thì không bao giờ có bộ lọc chọn nhiều thật.
+ *   · Không cách nào hỏi "tin nào dành cho người 3–5 năm", câu mà người đi làm
+ *     hỏi nhiều nhất, vì mọi ô đều kéo theo cả nhóm mới ra trường.
+ *
+ * Cắt theo `yearsExpMin` (số năm nhà tuyển dụng ĐÒI tối thiểu) vì đó là thứ
+ * quyết định "tôi có nộp được không". Cột là `Int?` nên các khoảng số nguyên
+ * dưới đây phủ kín, không có kẽ hở.
+ *
+ * Ô cuối là `FACET_NONE` — tin không ghi năm nào. Nó chiếm phần lớn kho, nên
+ * giấu đi là giấu mất phần lớn thị trường.
+ */
+/** Đếm theo một bảng khoảng cố định — giữ nguyên THỨ TỰ khai báo, kể cả ô 0 tin. */
+function countBands(
+  rows: FieldMatchedJob[],
+  bands: readonly { value: string; label: string; hint: string }[],
+  bandOf: (row: FieldMatchedJob) => string,
+): Facet[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = bandOf(row);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  // CỐ Ý giữ cả ô có 0 tin: ô lọc biến mất rồi hiện lại giữa các lần chọn là
+  // cách chắc chắn làm người dùng tưởng mình bấm nhầm. Giao diện tự làm mờ.
+  return bands.map((band) => ({
+    value: band.value,
+    label: band.label,
+    count: counts.get(band.value) ?? 0,
+    ...(band.hint ? { hint: band.hint } : {}),
+  }));
 }
 
 function countBy(

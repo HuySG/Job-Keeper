@@ -36,12 +36,28 @@ jobs:
   crawl:
     runs-on: ubuntu-latest
     # Trần cứng: một lượt treo không được phép ăn hết phút miễn phí của tháng.
-    timeout-minutes: 30
+    #
+    # 45 chứ không phải 30 vì lượt chạy NẶNG hằng ngày (18:30 UTC) nay có thêm
+    # CareerViet. Cộng theo số đo thật 09/09: vieclam24h ~20 phút + CareerViet
+    # ~6 phút + vnw ~10 phút + npm ci và seed ~2 phút ≈ 38 phút. 30 phút là
+    # chạm trần và bị cắt giữa chừng; 45 để lại khoảng thở mà vẫn chặn được
+    # lượt treo. Bốn lượt NHẸ còn lại chỉ khoảng 10 phút nên không đụng tới.
+    timeout-minutes: 45
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CRAWLER_CONTACT_EMAIL: ${{ secrets.CRAWLER_CONTACT_EMAIL }}
       CRAWLER_BOT_NAME: BaeJobBot
+      # Tỷ giá quy USD -> VND. KHÔNG phải bí mật nên để ở Variables, không phải
+      # Secrets (Settings -> Secrets and variables -> Actions -> Variables).
+      #
+      # Trước đây workflow không truyền hai biến này, nên lượt cào trên runner
+      # âm thầm dùng mức dự phòng cài cứng 25.400 trong salary.ts, còn máy ở
+      # nhà dùng mức trong .env. Cùng một tin ITviec khai lương USD sẽ ra hai
+      # con số VND khác nhau tuỳ chỗ chạy — sai lệch im lặng, không ai thấy.
+      # Chưa khai Variable thì vẫn rơi về mức dự phòng như cũ, không hỏng gì.
+      USD_VND_RATE: ${{ vars.USD_VND_RATE }}
+      USD_VND_RATE_DATE: ${{ vars.USD_VND_RATE_DATE }}
       # ⚠️ Ổ đĩa của runner bị xoá sau mỗi lượt, nên KHÔNG dùng driver "fs" ở
       #    đây: blob sẽ mất mà `rawKey` vẫn nằm lại trong CSDL, tạo ra con trỏ
       #    chết và `npm run reparse` sẽ báo "thiếu blob" mãi mãi.
@@ -57,6 +73,35 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # ⚠️ PHẢI đứng trước mọi bước tốn thời gian.
+      #
+      # Vì sao có bước này: khi secret chưa khai, lượt chạy vẫn đi hết checkout
+      # → setup-node → npm ci → prisma generate (khoảng 40 giây) rồi mới chết ở
+      # `db:seed` với thông báo của Prisma là "You must provide a nonempty URL.
+      # The environment variable DATABASE_URL resolved to an empty string" —
+      # nằm lọt giữa 300 dòng log và một vệt stack trace, không nói một chữ nào
+      # về GitHub Secrets. Đã mất năm lượt chạy đỏ liên tiếp mới truy ra.
+      #
+      # Kiểm ở đây thì hỏng trong 5 giây và thông báo nói thẳng phải làm gì.
+      - name: Kiểm secret bắt buộc
+        run: |
+          missing=""
+          [ -z "$DATABASE_URL" ] && missing="$missing DATABASE_URL"
+          [ -z "$CRAWLER_CONTACT_EMAIL" ] && missing="$missing CRAWLER_CONTACT_EMAIL"
+          if [ -n "$missing" ]; then
+            echo "::error title=Thiếu GitHub Secret::Chưa khai:$missing"
+            echo ""
+            echo "Khai tại: Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo ""
+            echo "  DATABASE_URL           chuỗi kết nối Neon, giống hệt trong .env dưới máy"
+            echo "  CRAWLER_CONTACT_EMAIL  email liên hệ, bắt buộc vì User-Agent phải liên hệ được"
+            echo ""
+            echo "Không có DATABASE_URL thì db:seed chết ngay; không có"
+            echo "CRAWLER_CONTACT_EMAIL thì buildUserAgent() ném lỗi ở bước cào."
+            exit 1
+          fi
+          echo "✓ Đủ secret bắt buộc."
 
       - uses: actions/setup-node@v4
         with:
@@ -79,6 +124,29 @@ jobs:
       - name: Cào vieclam24h (một lần mỗi ngày)
         if: github.event.schedule == '30 18 * * *'
         run: npm run crawl -- --source vieclam24h --full --limit 400
+
+      # CareerViet là nguồn lớn thứ hai sau VietnamWorks trong phạm vi ngành
+      # (đo 09/09: 134 tin thuộc phạm vi, so với vnw 764) và là nguồn khai giờ
+      # làm việc nhiều nhất, tức cột "lịch thứ 7" chỉ có dữ liệu thật nhờ nó.
+      #
+      # Trần 100 chứ không phải 250 vì ngân sách THỜI GIAN, không phải vì nguồn
+      # yếu: đo thật 09/09 là 3,3 giây/URL (250 trang mất 13,9 phút, 377 MB —
+      # trang chi tiết của họ nặng ~1,5 MB). 100 trang ≈ 6 phút, vừa với lượt
+      # chạy nặng hằng ngày mà không đụng trần `timeout-minutes`.
+      - name: Cào CareerViet (một lần mỗi ngày)
+        if: github.event.schedule == '30 18 * * *'
+        run: npm run crawl -- --source careerviet --full --limit 100
+
+      # CỐ Ý CHƯA đưa timviec365 vào lịch, dù nguồn chạy tốt. Hai lý do đo được:
+      #
+      #  1. CHẬM: 167 URL mất 63,6 phút (≈23 giây/URL, gấp bảy lần CareerViet).
+      #     Chỉ riêng nó đã ăn hết trần thời gian của cả lượt chạy.
+      #  2. LỢI ÍCH THẤP lúc này: `datePosted` của sàn là ngày đăng LẦN ĐẦU chứ
+      #     không phải ngày gia hạn, nên bộ lọc `maxAgeDays: 90` của ngành loại
+      #     gần hết — đo 09/09 chỉ 1/117 tin lọt vào phạm vi trang Ngành.
+      #
+      # Muốn bật: nới `maxAgeDays` trong SavedFilter trước (nếu không thì cào
+      # về rồi lọc bỏ), rồi thêm bước với trần thấp, ví dụ `--limit 40`.
 
       - name: Kiểm tin còn tuyển
         # Chỉ kiểm tin thuộc ngành đang quan tâm — vài chục request thay vì vài
