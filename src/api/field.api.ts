@@ -13,6 +13,7 @@ import {
 } from '@/lib/field-bands';
 import { compileField, isNarrowHcm, matchJob, type MatchResult } from '@/lib/field-match';
 import { classifyPurchase, type PurchaseTypeResult } from '@/lib/purchase-type';
+import { toMatchKey } from '@/crawler/normalize/text';
 
 // Bảng khoảng lọc nằm ở `lib/field-bands` (không có `server-only`) để giao
 // diện tra được nhãn; xuất lại ở đây cho chỗ gọi cũ khỏi phải biết chuyện đó.
@@ -88,6 +89,20 @@ export interface FieldPage {
   weak: number;
   /** Số tin đã chấm để ra được từng ấy — mẫu số của "lọt qua từ điển". */
   scanned: number;
+  /**
+   * Số tin TỪ ĐIỂN nhận, đếm trước mọi lựa chọn của người dùng.
+   *
+   * Tách khỏi `total` vì hai con số trả lời hai câu khác nhau, mà đặt cạnh nhau
+   * thì nhìn giống hệt. `total` là "còn bao nhiêu tin sau khi tôi lọc"; con số
+   * này là "từ điển ngành chặt tới đâu" — thuộc tính của TỪ ĐIỂN, không phải
+   * của phiên xem này.
+   *
+   * Trước đây giao diện lấy `total/scanned` làm tỷ lệ "lọt qua từ điển". Sai:
+   * tích thêm một ô lọc quận là tỷ lệ đó tụt, làm như từ điển vừa chặt hơn —
+   * trong khi từ điển không hề đổi. Mẫu số đúng là `scanned - droppedByNarrowHcm`
+   * (số tin thật sự được đưa qua từ điển).
+   */
+  dictionaryAccepted: number;
   freshlyChecked: number;
   droppedByNarrowHcm: number;
 
@@ -146,6 +161,22 @@ export interface FieldQuery {
   strictHcm?: boolean;
 
   /**
+   * Tìm chữ trong TIÊU ĐỀ và TÊN CÔNG TY của tin đã vào ngành.
+   *
+   * Đây là chiều THU HẸP PHẠM VI, cùng hạng với `includeWeak`/`strictHcm`, chứ
+   * không phải chiều lọc như `districts`. Khác biệt quan trọng: nó áp TRƯỚC lúc
+   * đếm facet, nên gõ "Vietmap" thì mọi con số trong bảng lọc — quận, lương,
+   * kinh nghiệm — đều đếm lại trong phạm vi Vietmap. Nếu áp sau như một chiều
+   * lọc thì bảng lọc hiện số của cả ngành trong khi danh sách chỉ có Vietmap,
+   * và hai bên nói hai chuyện khác nhau.
+   *
+   * Bỏ dấu hai đầu bằng `toMatchKey`, nên gõ "ke toan" ra "Kế Toán". CỐ Ý không
+   * tìm trong `descriptionText`: mô tả dài và đầy chữ soạn sẵn, tìm ở đó thì
+   * gõ "sản xuất" ra gần như mọi tin — đúng kiểu ồn ào làm ô tìm kiếm vô dụng.
+   */
+  q?: string;
+
+  /**
    * Bốn chiều dưới đây đều là **chọn nhiều**. Quy ước ở khắp nơi:
    * nhiều giá trị TRONG một chiều là HOẶC, giữa các chiều là VÀ.
    * Mảng rỗng = không lọc chiều đó.
@@ -201,15 +232,29 @@ export async function findFieldJobs(
   // ── Bước 1: vào ngành hay không ────────────────────────────────────────────
   const inField: FieldMatchedJob[] = [];
   let droppedByNarrowHcm = 0;
+  let dictionaryAccepted = 0;
+
+  // Chuẩn hoá MỘT LẦN ngoài vòng lặp: `toMatchKey` chạy regex, và vòng này
+  // quay vài nghìn lượt mỗi lần tải trang.
+  const needle = query.q?.trim() ? toMatchKey(query.q) : null;
 
   for (const job of candidates) {
     if (query.strictHcm && !isNarrowHcm(job.locations.map((l) => l.rawText))) {
       droppedByNarrowHcm += 1;
       continue;
     }
+
     const match = matchJob(field, { title: job.title, description: job.descriptionText });
     if (match.verdict === 'reject') continue;
+
+    // Đếm NGAY ĐÂY, trước mọi lựa chọn của người dùng. Đây là thước đo của
+    // riêng TỪ ĐIỂN — nó không được nhúc nhích khi ai đó tích thêm một ô lọc
+    // hay gõ vào ô tìm kiếm. Xem `dictionaryAccepted` ở `FieldPage`.
+    dictionaryAccepted += 1;
+
     if (match.verdict === 'weak' && !query.includeWeak) continue;
+    if (needle && !hitsText(job, needle)) continue;
+
     inField.push({ job, match, purchase: classifyPurchase(job) });
   }
 
@@ -310,6 +355,7 @@ export async function findFieldJobs(
     strong,
     weak: total - strong,
     scanned: candidates.length,
+    dictionaryAccepted,
     freshlyChecked,
     droppedByNarrowHcm,
     facets,
@@ -353,6 +399,23 @@ const LEVEL_LABELS: Record<string, string> = {
  * đó, để các lựa chọn còn lại vẫn hiện số thật thay vì 0.
  */
 export type FieldDimension = 'purchaseTypes' | 'districts' | 'saturdays' | 'experience' | 'salary';
+
+/**
+ * Tin có chứa chuỗi tìm kiếm trong tiêu đề hoặc tên công ty không.
+ *
+ * `needle` phải ĐÃ qua `toMatchKey` trước khi gọi — chuẩn hoá lại trong này là
+ * chạy regex thêm vài nghìn lần cho mỗi lần tải trang.
+ *
+ * Dùng `toMatchKey(job.title)` chứ không dùng cột `titleNorm` có sẵn: `titleNorm`
+ * do crawler ghi, nên nếu luật chuẩn hoá đổi thì các tin cũ mang chuẩn cũ và
+ * cùng một câu tìm ra hai kết quả khác nhau tuỳ tin cũ hay mới. Tính tại chỗ
+ * thì hai vế luôn cùng một luật.
+ */
+function hitsText(job: JobListItem, needle: string): boolean {
+  return (
+    toMatchKey(job.title).includes(needle) || toMatchKey(job.company.name).includes(needle)
+  );
+}
 
 function keep(row: FieldMatchedJob, query: FieldQuery, except: FieldDimension | null): boolean {
   const { job } = row;

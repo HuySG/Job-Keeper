@@ -1,187 +1,181 @@
 @import 'tailwindcss';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   HỆ MÀU — một chỗ duy nhất, mọi thứ khác chỉ gọi tên vai trò
+   HỆ MÀU "MODERNIST" — một chỗ duy nhất, mọi thứ khác chỉ gọi tên vai trò
    ═══════════════════════════════════════════════════════════════════════════
 
-   Ba nhóm token, KHÔNG được trộn vào nhau:
+   Nguồn sự thật: `modernist.css` trong bộ bàn giao từ Claude Design. File này
+   KHÔNG chép lại nguyên xi mà DỊCH sang tên vai trò mà các component trong
+   `src/components` đã gọi sẵn (`bg-surface`, `text-muted`, `border-border`…).
+   Nhờ vậy đổi hệ màu là đổi đúng một file: bốn trang còn lại tự ăn theo mà
+   không phải sửa một dòng JSX nào.
 
-     1. Nền & chữ   — dựng khung, luôn xám trung tính
-     2. Trạng thái  — good/warn/serious/critical. DÀNH RIÊNG cho trạng thái,
+   Bốn nhóm token, KHÔNG được trộn vào nhau:
+
+     1. Nền & chữ   — dựng khung, xám ẤM trung tính
+     2. Thang màu   — neutral/accent/accent-2, mỗi thang 9 bậc, dùng khi cần
+                      gọi đích danh một bậc (nền tối, thanh biểu đồ nhạt…)
+     3. Trạng thái  — good/warn/serious/critical. DÀNH RIÊNG cho trạng thái,
                       không bao giờ mượn làm "màu thứ tư" của biểu đồ
-     3. Dữ liệu     — series 1–8 cho biểu đồ phân loại, ramp xanh cho biểu đồ
-                      độ lớn
+     4. Dữ liệu     — series 1–8 cho biểu đồ phân loại, ramp cho biểu đồ độ lớn
 
-   Vì sao ghi bằng hex chứ không phải oklch như bản trước: bộ màu này đã được
-   kiểm bằng máy (độ tách mù màu ΔE, dải sáng, sàn chroma, độ tương phản trên
-   ĐÚNG hai mặt nền dưới đây). Ghi đúng giá trị đã kiểm thì cái chạy thật là
-   cái đã kiểm, không phải một bản quy đổi gần đúng.
-
-   Bản trước đặt `@theme` LỒNG trong `@media (prefers-color-scheme: dark)`.
-   Tailwind v4 chỉ đọc `@theme` ở cấp cao nhất, nên toàn bộ chế độ tối im lặng
-   không chạy. Nay: `@theme` khai báo bảng sáng, còn bảng tối ghi đè biến CSS
-   trên `:root` — utilities của Tailwind đều trỏ qua `var()` nên ăn ngay.
+   ĐÃ BỎ CHẾ ĐỘ TỐI (quyết định của chủ dự án, 10/09/2026). Modernist không có
+   bảng tối, và dựng một bảng tối "suy ra" thì nó không còn là hệ đã được kiểm.
+   Hệ quả phải biết: máy để ở chế độ tối vẫn thấy trang sáng. `color-scheme`
+   dưới đây khai `light` để trình duyệt tô thanh cuộn và ô nhập cho đúng, thay
+   vì tự đảo màu form control.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme {
   /* ── Nền & chữ ─────────────────────────────────────────────────────────── */
-  --color-canvas: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-inset: #f1f3f6;
-  --color-border: #e2e5ea;
-  --color-border-strong: #cbd1da;
-  --color-text: #10141a;
-  --color-muted: #5c6673;
-  --color-faint: #767f8c;
 
-  /* Nhãn hiệu = xanh dữ liệu. `accent` để TÔ MẢNG, `accent-ink` để VIẾT CHỮ:
-     #2a78d6 trên nền trắng chỉ đạt 4.42:1, hụt sàn 4.5:1 của chữ cỡ thường. */
-  --color-accent: #2a78d6;
-  --color-accent-ink: #1c5cab;
-  --color-accent-soft: #eaf2fd;
+  /* `canvas` là nền trang (`--color-bg` của Modernist); `surface` SÁNG HƠN
+     canvas chứ không tối hơn — thẻ nổi lên bằng độ sáng, không bằng viền. */
+  --color-canvas: #f3f2f2;
+  --color-surface: #f8f4f4;
+  --color-inset: #eae7e7;
+
+  /* Đường kẻ của Modernist là MỰC TRONG SUỐT chứ không phải một màu xám cố
+     định: cùng một token đặt trên nền sáng hay nền tối đều ra đúng sắc độ.
+     Đây là lý do dải chỉ số nền đen ở trang Ngành không cần token riêng. */
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+  --color-border: color-mix(in srgb, #201e1d 40%, transparent);
+  --color-border-strong: color-mix(in srgb, #201e1d 62%, transparent);
+
+  --color-text: #201e1d;
+  --color-muted: #605d5d;
+  --color-faint: #7d7979;
+
+  /* Nhãn hiệu = đỏ Modernist. `accent` để TÔ MẢNG, `accent-ink` để VIẾT CHỮ:
+     #ec3013 trên nền kem chỉ đạt 4.05:1, hụt sàn 4.5:1 của chữ cỡ thường.
+     #ae1800 (accent-700) đạt 7.1:1 — đây là màu của con số lương và của link. */
+  --color-accent: #ec3013;
+  --color-accent-ink: #ae1800;
+  --color-accent-soft: #fff2ef;
+
+  /* ── Thang neutral ─────────────────────────────────────────────────────── */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  /* ── Thang accent ──────────────────────────────────────────────────────── */
+  --color-accent-100: #fff2ef;
+  --color-accent-200: #ffe0d9;
+  --color-accent-300: #ffc4b8;
+  --color-accent-400: #ff9783;
+  --color-accent-500: #ff563c;
+  --color-accent-600: #dd2b0f;
+  --color-accent-700: #ae1800;
+  --color-accent-800: #7c1405;
+  --color-accent-900: #4d170e;
+
+  /* ── Thang accent-2 ────────────────────────────────────────────────────── */
+  --color-accent-2: #e15b47;
+  --color-accent-2-100: #fff2ef;
+  --color-accent-2-200: #ffe0da;
+  --color-accent-2-300: #ffc4b9;
+  --color-accent-2-400: #ff9784;
+  --color-accent-2-500: #ef6853;
+  --color-accent-2-600: #c94b39;
+  --color-accent-2-700: #9e3526;
+  --color-accent-2-800: #71261b;
+  --color-accent-2-900: #471d16;
 
   /* ── Trạng thái ────────────────────────────────────────────────────────── */
-  --color-good: #0ca30c;
-  --color-good-ink: #06710d;
-  --color-good-soft: #e8f7e8;
-  --color-warn: #fab219;
+  /*
+   * ĐÁNH ĐỔI PHẢI BIẾT: nhãn hiệu của hệ này LÀ MÀU ĐỎ, nên "đỏ báo nguy" mất
+   * phần lớn sức cảnh báo — mắt đã thấy đỏ ở khắp nơi (nút chính, con số lương,
+   * dải hero). Hai cách bù, dùng CẢ HAI:
+   *
+   *   1. `critical` đặt TỐI HƠN HẲN accent (#a01b10 vs #ec3013). Khác biệt là
+   *      độ sáng chứ không phải sắc — đọc được cả khi in đen trắng.
+   *   2. `Badge` luôn vẽ CHẤM + CHỮ, không bao giờ chỉ có màu. Xem `ui/badge`.
+   *
+   * Bốn sắc dưới đây tách nhau bằng cả sắc lẫn độ sáng, và đều ngả ấm để không
+   * chỏi với nền kem.
+   */
+  --color-good: #1f8f3d;
+  --color-good-ink: #14672c;
+  --color-good-soft: #e7f2e6;
+  --color-warn: #d99000;
   --color-warn-ink: #8a5a00;
-  --color-warn-soft: #fdf3e0;
-  --color-serious: #ec835a;
-  --color-serious-ink: #a24a22;
-  --color-serious-soft: #fdeee7;
-  --color-critical: #d03b3b;
-  --color-critical-ink: #a92626;
-  --color-critical-soft: #fceceb;
+  --color-warn-soft: #faf0d9;
+  --color-serious: #c05621;
+  --color-serious-ink: #8a3a12;
+  --color-serious-soft: #f8e5d8;
+  --color-critical: #a01b10;
+  --color-critical-ink: #7c140b;
+  --color-critical-soft: #f6ddd8;
 
   /* ── Dữ liệu: 8 ô phân loại, thứ tự CỐ ĐỊNH ────────────────────────────── */
-  --color-series-1: #2a78d6;
-  --color-series-2: #eb6834;
-  --color-series-3: #1baf7a;
-  --color-series-4: #eda100;
-  --color-series-5: #e87ba4;
-  --color-series-6: #008300;
-  --color-series-7: #4a3aa7;
-  --color-series-8: #e34948;
+  /* Modernist không kèm bộ màu phân loại. Bộ dưới đây neo ô thứ nhất vào đúng
+     màu nhãn hiệu rồi rẽ sang các sắc tách bạc — vẫn ngả ấm, nhưng đủ xa nhau
+     để đọc được khi tám mảng đứng cạnh nhau. */
+  --color-series-1: #ec3013;
+  --color-series-2: #2d6a8f;
+  --color-series-3: #d99000;
+  --color-series-4: #4a7c3f;
+  --color-series-5: #8c4a9e;
+  --color-series-6: #c94b39;
+  --color-series-7: #35606b;
+  --color-series-8: #7c1405;
 
   /* ── Dữ liệu: ramp một sắc cho ĐỘ LỚN (nhạt = ít, đậm = nhiều) ─────────── */
-  --color-ramp-1: #cde2fb;
-  --color-ramp-2: #9ec5f4;
-  --color-ramp-3: #5598e7;
-  --color-ramp-4: #2a78d6;
-  --color-ramp-5: #1c5cab;
-  --color-ramp-6: #104281;
+  /* Bậc 4 cố ý rơi đúng vào `accent-300` — đó là màu thanh biểu đồ trong bản
+     thiết kế, và `BarList` lấy `bg-ramp-4` làm màu thanh mặc định. Thanh mặc
+     định phải NHẠT để thanh đang được lọc (tô `accent` đỏ đặc) nổi hẳn lên. */
+  --color-ramp-1: #fff2ef;
+  --color-ramp-2: #ffe0d9;
+  --color-ramp-3: #ffd2c8;
+  --color-ramp-4: #ffc4b8;
+  --color-ramp-5: #ff9783;
+  --color-ramp-6: #ff563c;
 
   /* ── Đường kẻ của biểu đồ: mảnh, LIỀN NÉT, lùi hẳn ra sau ──────────────── */
-  --color-grid: #e8eaee;
-  --color-axis: #cbd1da;
+  --color-grid: #eae7e7;
+  --color-axis: color-mix(in srgb, #201e1d 40%, transparent);
 
-  --radius-card: 0.75rem;
+  /* ── Hình khối ─────────────────────────────────────────────────────────── */
+  /* Modernist bo góc 0 ở MỌI cỡ. Giữ tên `radius-card` để không phải đi sửa
+     `rounded-card` rải khắp component — đổi ở đây là đổi cả app. */
+  --radius-card: 0px;
+
+  /* ── Chữ ───────────────────────────────────────────────────────────────── */
+  /* `--font-archivo` do `next/font` đặt vào thẻ <html>; xem `app/layout.tsx`.
+     Dự phòng vẫn phải đủ dài: mạng hỏng thì trang vẫn đọc được. */
+  --font-sans: var(--font-archivo), system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-/* Bảng tối được CHỌN từng bước cho nền tối, không phải lật ngược bảng sáng.
-   Hai phạm vi: `@media` theo cài đặt hệ điều hành, `[data-theme]` theo nút gạt
-   của người dùng — và nút gạt phải thắng cả hai chiều. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-
-    --color-canvas: #0e1116;
-    --color-surface: #161b22;
-    --color-inset: #1c2230;
-    --color-border: #262d38;
-    --color-border-strong: #39424f;
-    --color-text: #e6edf3;
-    --color-muted: #9aa5b1;
-    --color-faint: #79838f;
-
-    --color-accent: #3987e5;
-    --color-accent-ink: #7cb2f0;
-    --color-accent-soft: #16273d;
-
-    --color-good: #0ca30c;
-    --color-good-ink: #4cc94c;
-    --color-good-soft: #12240f;
-    --color-warn: #fab219;
-    --color-warn-ink: #e8b13c;
-    --color-warn-soft: #2a2110;
-    --color-serious: #ec835a;
-    --color-serious-ink: #f0a184;
-    --color-serious-soft: #2c1c14;
-    --color-critical: #d03b3b;
-    --color-critical-ink: #ef7a7a;
-    --color-critical-soft: #2c1516;
-
-    --color-series-1: #3987e5;
-    --color-series-2: #d95926;
-    --color-series-3: #199e70;
-    --color-series-4: #c98500;
-    --color-series-5: #d55181;
-    --color-series-6: #008300;
-    --color-series-7: #9085e9;
-    --color-series-8: #e66767;
-
-    /* Ở nền tối, "nhiều hơn" phải là SÁNG hơn — ramp đảo chiều so với nền sáng.
-       Giữ nguyên chiều nhạt→đậm là vẽ cột lớn nhất chìm vào nền. */
-    --color-ramp-1: #17324f;
-    --color-ramp-2: #1c5cab;
-    --color-ramp-3: #2a78d6;
-    --color-ramp-4: #3987e5;
-    --color-ramp-5: #6da7ec;
-    --color-ramp-6: #9ec5f4;
-
-    --color-grid: #222833;
-    --color-axis: #39424f;
-  }
+/*
+ * Bo góc 0 cho MỌI utility bo góc, không riêng `rounded-card`.
+ *
+ * Component có sẵn dùng đủ loại `rounded-lg`, `rounded-md`, `rounded-full`,
+ * `rounded-[4px]`… Ghi đè biến của Tailwind ở một chỗ rẻ hơn nhiều so với đi
+ * lục từng file — và quan trọng hơn: nó khiến component viết sau này không thể
+ * lỡ tay bo góc lệch hệ.
+ *
+ * NGOẠI LỆ `rounded-full`: ô tích tròn và chấm của `Badge` vẫn phải tròn. Giữ
+ * `--radius-full` nguyên vẹn, chỉ hạ các bậc có kích thước.
+ */
+@theme {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 }
 
-:root[data-theme='dark'] {
-  color-scheme: dark;
-
-  --color-canvas: #0e1116;
-  --color-surface: #161b22;
-  --color-inset: #1c2230;
-  --color-border: #262d38;
-  --color-border-strong: #39424f;
-  --color-text: #e6edf3;
-  --color-muted: #9aa5b1;
-  --color-faint: #79838f;
-
-  --color-accent: #3987e5;
-  --color-accent-ink: #7cb2f0;
-  --color-accent-soft: #16273d;
-
-  --color-good: #0ca30c;
-  --color-good-ink: #4cc94c;
-  --color-good-soft: #12240f;
-  --color-warn: #fab219;
-  --color-warn-ink: #e8b13c;
-  --color-warn-soft: #2a2110;
-  --color-serious: #ec835a;
-  --color-serious-ink: #f0a184;
-  --color-serious-soft: #2c1c14;
-  --color-critical: #d03b3b;
-  --color-critical-ink: #ef7a7a;
-  --color-critical-soft: #2c1516;
-
-  --color-series-1: #3987e5;
-  --color-series-2: #d95926;
-  --color-series-3: #199e70;
-  --color-series-4: #c98500;
-  --color-series-5: #d55181;
-  --color-series-6: #008300;
-  --color-series-7: #9085e9;
-  --color-series-8: #e66767;
-
-  --color-ramp-1: #17324f;
-  --color-ramp-2: #1c5cab;
-  --color-ramp-3: #2a78d6;
-  --color-ramp-4: #3987e5;
-  --color-ramp-5: #6da7ec;
-  --color-ramp-6: #9ec5f4;
-
-  --color-grid: #222833;
-  --color-axis: #39424f;
+:root {
+  color-scheme: light;
 }
 
 html {
@@ -191,7 +185,22 @@ html {
 body {
   background: var(--color-canvas);
   color: var(--color-text);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Tiêu đề của Modernist là Archivo 800, sát chữ và sát dòng. Đặt ở đây thay vì
+   rắc `font-extrabold tracking-tight` lên từng thẻ h1–h6 trong JSX. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
 }
 
 /* Số xếp thành CỘT thì phải thẳng hàng — bảng, nhãn trục, dãy chỉ số.
@@ -201,11 +210,16 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Vòng focus dùng chung, để đi bằng bàn phím không bị lạc. */
+/* Vòng focus dùng chung, để đi bằng bàn phím không bị lạc. Bo góc 0 cho khớp
+   hình khối của hệ — vòng focus bo tròn quanh một ô vuông trông như lỗi. */
 :where(a, button, input, select, summary):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 0;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

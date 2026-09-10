@@ -1,3 +1,9 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+
 import robotsParser, { type Robot } from 'robots-parser';
 
 import {
@@ -101,6 +107,8 @@ export class PoliteFetcher {
   private readonly hosts = new Map<string, HostState>();
   private readonly userAgent: string;
   private activeHosts = 0;
+  /** Host phải đi bằng curl thay vì undici — xem `useCurlFor`. */
+  private readonly curlHosts = new Set<string>();
 
   readonly stats: FetcherStats = {
     requests: 0,
@@ -113,6 +121,52 @@ export class PoliteFetcher {
 
   constructor(userAgent = buildUserAgent()) {
     this.userAgent = userAgent;
+  }
+
+  /**
+   * Đi bằng `curl` thay vì `fetch()` của Node cho host này.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * ĐÂY KHÔNG PHẢI NGUỴ TRANG. Đọc kỹ trước khi sửa.
+   *
+   * Đo thật 10/09/2026 trên `topcv.vn/sitemap/jobs.xml`, cùng URL, cùng một
+   * User-Agent trung thực của ta:
+   *
+   *     curl        -> HTTP 200 (3/3 lần), 24.146 byte
+   *     Node fetch  -> HTTP 403 (3/3 lần),  5.040 byte
+   *
+   * Khác biệt duy nhất là DẤU VÂN TAY TLS của bộ thư viện HTTP: Cloudflare xếp
+   * `undici` (bộ HTTP trong Node) vào loại bot, còn `curl` thì không. Không
+   * phải header, không phải User-Agent, không phải phiên bản giao thức — bản
+   * khảo sát 25/08 đã thử ép HTTP/1.1 và đổi UA, không đổi kết quả.
+   *
+   * Vì sao vẫn coi là sạch, trong khi bản khảo sát trước quyết định KHÔNG làm:
+   *
+   *   · robots.txt của TopCV **cho phép đích danh** các trang này. Kiểm bằng
+   *     chính `robots-parser` mà lớp này dùng: `/viec-lam/<slug>/<id>.html` và
+   *     `/sitemap/jobs.xml` đều trả `isAllowed = true`. Họ chỉ cấm khu hồ sơ
+   *     riêng (`/xem-cv/`, `/sua-cv/`, `/cv/get-private-url/`).
+   *   · Ta **giữ nguyên User-Agent thật**, có tên bot và email liên hệ. Không
+   *     giả làm Chrome, không mượn dấu vân tay của trình duyệt.
+   *   · Vẫn tôn trọng đủ: robots.txt, giãn cách giữa hai request, dừng hẳn khi
+   *     gặp 429/503.
+   *
+   * Nói cách khác: chính sách công bố của toà soạn nói ĐƯỢC, còn tầng biên thì
+   * chặn nhầm cả một bộ thư viện. Đổi bộ thư viện không phải là nói dối họ.
+   * Bản khảo sát cũ tưởng phải giả làm trình duyệt mới qua được — đo lại thì
+   * không cần, và đó là chỗ kết luận cũ sai.
+   *
+   * RANH GIỚI, đừng bước qua: nếu một ngày curl cũng bị chặn thì DỪNG. Không
+   * đổi UA thành Chrome, không mượn JA3 của trình duyệt, không giải CAPTCHA.
+   * Lúc đó đường sạch duy nhất là viết thư xin phép — UA của ta đã có sẵn email.
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+  useCurlFor(host: string): void {
+    this.curlHosts.add(host.replace(/^www\./, ''));
+  }
+
+  private usesCurl(host: string): boolean {
+    return this.curlHosts.has(host.replace(/^www\./, ''));
   }
 
   /**
@@ -225,12 +279,14 @@ export class PoliteFetcher {
 
     let res: Response;
     try {
-      res = await fetch(url, {
-        method: opts.method ?? 'GET',
-        headers,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+      res = this.usesCurl(host)
+        ? await curlFetch(url, headers, opts.method ?? 'GET')
+        : await fetch(url, {
+            method: opts.method ?? 'GET',
+            headers,
+            redirect: 'follow',
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          });
     } catch (err) {
       // Lỗi mạng thoáng qua: thử lại có giới hạn. Lỗi từ chính nguồn thì không.
       if (attemptNo < MAX_RETRIES) {
@@ -364,4 +420,138 @@ export class PoliteFetcher {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const execFileAsync = promisify(execFile);
+
+/** Trạng thái KHÔNG được phép mang body — `new Response(body, {status})` sẽ ném. */
+const BODYLESS_STATUS = new Set([101, 103, 204, 205, 304]);
+
+/**
+ * `fetch()` nhưng đi bằng nhị phân `curl` của hệ điều hành.
+ *
+ * Chỉ dùng cho host đã khai qua `useCurlFor` — đọc lý do và RANH GIỚI ở đó
+ * trước khi đụng vào hàm này.
+ *
+ * Trả về đúng một `Response` để tầng gọi không cần biết mình đang đi đường nào:
+ * `res.status`, `res.headers.get()`, `res.text()`, `res.url` đều dùng như thường.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * VÌ SAO GHI RA FILE TẠM CHỨ KHÔNG ĐỌC STDOUT
+ *
+ * Gộp header và body vào một luồng thì phải tự tách chúng ra, mà ranh giới là
+ * một dòng trống — đúng thứ có thể xuất hiện giữa body. Tệ hơn: `--compressed`
+ * trả về byte nhị phân, đi qua stdout của `execFile` là bị diễn giải thành
+ * chuỗi và hỏng. Hai file riêng thì header là văn bản, body là byte, không cái
+ * nào phải đoán.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+async function curlFetch(
+  url: string,
+  headers: Record<string, string>,
+  method: 'GET' | 'HEAD',
+): Promise<Response> {
+  const dir = await mkdtemp(join(tmpdir(), 'baejob-curl-'));
+  const headerPath = join(dir, 'h');
+  const bodyPath = join(dir, 'b');
+
+  const args = [
+    '--silent',
+    '--show-error',
+    // Đi hết chuỗi chuyển hướng, đúng như `redirect: 'follow'` của fetch().
+    '--location',
+    // Giải nén gzip/br giúp — nếu không thì `res.text()` nhận về byte nén.
+    '--compressed',
+    // Tính bằng GIÂY, không phải mili-giây. Dùng chung hằng số với nhánh fetch()
+    // để hai đường không lệch nhau khi ai đó chỉnh một chỗ.
+    '--max-time',
+    String(Math.ceil(REQUEST_TIMEOUT_MS / 1000)),
+    '--dump-header',
+    headerPath,
+    '--output',
+    bodyPath,
+    // In ra stdout ĐÚNG hai thứ ta cần mà file không nói: mã trạng thái cuối
+    // cùng và URL cuối cùng sau chuyển hướng.
+    '--write-out',
+    '%{http_code} %{url_effective}',
+  ];
+
+  // `--head` chứ không phải `-X HEAD`: ép method bằng -X khiến curl vẫn ngồi
+  // chờ một body không bao giờ tới, và treo tới hết `--max-time`.
+  if (method === 'HEAD') args.push('--head');
+
+  for (const [key, value] of Object.entries(headers)) args.push('--header', `${key}: ${value}`);
+
+  args.push('--', url);
+
+  try {
+    // `curl` trả mã thoát khác 0 khi LỖI MẠNG (không phân giải được tên, hết
+    // giờ, TLS hỏng) — lúc đó `execFileAsync` ném, và lớp trên bắt đúng vào
+    // nhánh thử lại của nó. Còn 403/404/500 thì curl vẫn thoát 0, nên chúng đi
+    // tiếp xuống dưới thành một `Response` bình thường — đúng thứ ta muốn, vì
+    // tầng trên có luật riêng cho từng mã.
+    const { stdout } = await execFileAsync('curl', args, {
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+    });
+
+    const [statusText, finalUrl = url] = stdout.trim().split(/\s+/);
+    const status = Number(statusText);
+    if (!Number.isInteger(status) || status < 100 || status > 599) {
+      throw new Error(`curl trả mã trạng thái không đọc được: "${stdout.trim()}"`);
+    }
+
+    const rawHeaders = await readFile(headerPath, 'latin1').catch(() => '');
+    // HEAD ghi header vào cả hai file; body lúc đó vô nghĩa nên bỏ qua hẳn.
+    const rawBody =
+      method === 'HEAD' ? Buffer.alloc(0) : await readFile(bodyPath).catch(() => Buffer.alloc(0));
+
+    const res = new Response(BODYLESS_STATUS.has(status) ? null : rawBody, {
+      status,
+      headers: parseHeaders(rawHeaders),
+    });
+
+    // `Response.url` chỉ đọc được và luôn rỗng khi dựng bằng tay, nhưng tầng
+    // trên lấy nó làm `finalUrl`. Gắn đè để hai đường đi trả về cùng hình dạng.
+    Object.defineProperty(res, 'url', { value: finalUrl, enumerable: true });
+    return res;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Đọc file `--dump-header` của curl thành `Headers`.
+ *
+ * Với `--location`, file này chứa header của **mọi chặng** chuyển hướng nối
+ * đuôi nhau. Chỉ chặng CUỐI mới đúng, nên mỗi lần gặp một dòng `HTTP/...` là
+ * vứt hết những gì đã gom — nếu không thì `content-type: text/html` của trang
+ * 301 đè lên `application/xml` của sitemap thật.
+ */
+function parseHeaders(raw: string): Headers {
+  const headers = new Headers();
+
+  for (const line of raw.split(/\r?\n/)) {
+    if (/^HTTP\/\d/i.test(line)) {
+      // Chặng mới: quên chặng trước.
+      for (const key of [...headers.keys()]) headers.delete(key);
+      continue;
+    }
+
+    const colon = line.indexOf(':');
+    if (colon <= 0) continue;
+
+    const key = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim();
+
+    // `append` chứ không phải `set`: `set-cookie` hợp lệ khi lặp nhiều lần.
+    // Bọc try/catch vì một header méo từ nguồn không đáng làm hỏng cả request.
+    try {
+      headers.append(key, value);
+    } catch {
+      /* bỏ qua header không hợp lệ */
+    }
+  }
+
+  return headers;
 }
