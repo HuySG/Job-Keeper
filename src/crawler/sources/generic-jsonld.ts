@@ -54,8 +54,13 @@ export const genericJsonLdAdapter: SourceAdapter = {
       ...(config.sitemapUrlPattern
         ? { sitemapUrlPattern: new RegExp(config.sitemapUrlPattern) }
         : {}),
+      // Cờ `i`: mẫu nhắm mục tiêu tra TỪ NGHỀ trong slug, mà không sàn nào
+      // thống nhất kiểu chữ. Đo thật 11/09/2026 — iconicjob.vn viết hoa từng
+      // từ (`/viec-lam/Senior-Purchasing-Staff-125687`) còn careerviet và
+      // timviec365 viết thường. Không có cờ này thì mẫu chữ thường lọc sạch
+      // 255/255 URL của iconicjob và nguồn im lặng trả 0 tin.
       ...(config.urlIncludePattern
-        ? { urlIncludePattern: new RegExp(config.urlIncludePattern) }
+        ? { urlIncludePattern: new RegExp(config.urlIncludePattern, 'i') }
         : {}),
       modifiedSince,
       maxSitemaps: ctx.limits.maxSitemaps,
@@ -134,6 +139,7 @@ async function fetchAndParse(
     pageUrl: url,
     externalIdFromUrl: () => externalId,
     fallback,
+    trustStreetFirst: config.trustStreetFirst ?? false,
   });
 
   if (missingRequired.length > 0) {

@@ -207,10 +207,27 @@ export async function walkSitemap(
       continue;
     }
 
+    const nested: SitemapEntry[] = [];
+
     for (const entry of parseEntries(xml, URL_BLOCK_RE)) {
       if (result.entries.length >= maxUrls) {
         result.truncated = true;
         break;
+      }
+      // Sitemap LỒNG NHAU nhưng khai sai kiểu: `<urlset>` chứa toàn `.xml`.
+      //
+      // Đúng chuẩn thì một file trỏ sang file khác phải bọc `<sitemapindex>`.
+      // vieclamnhamay.vn không làm thế — đo thật 11/09/2026,
+      // `tin-tuyen-dung.xml` là `<urlset>` gồm 39 mục, mục nào cũng là
+      // `tin-tuyen-dung-pN.xml`. Chỉ nhìn thẻ bọc thì cả 39 mục rơi vào vòng
+      // dưới, trượt `jobUrlPattern`, và nguồn im lặng trả 0 URL.
+      //
+      // Nhận diện theo NỘI DUNG chứ không theo thẻ bọc, và chỉ khi mục đó đã
+      // trượt `jobUrlPattern` — nên nguồn nào đặt tin ở đuôi `.xml` (không có)
+      // vẫn được xử đúng, còn 6 nguồn cũ thì không đổi hành vi một chút nào.
+      if (isNestedSitemap(entry.url, jobUrlPattern)) {
+        nested.push(entry);
+        continue;
       }
       if (jobUrlPattern && !jobUrlPattern.test(entry.url)) continue;
       // Lọc nhắm mục tiêu chạy TRƯỚC khi tính vào `maxUrls`: mục đích của nó là
@@ -229,10 +246,35 @@ export async function walkSitemap(
 
       result.entries.push({ url: canonical, lastModified: entry.lastModified });
     }
+
+    // Xếp sau các URL tin: file lồng chỉ được đi khi vòng này không tìm ra tin.
+    for (const child of nested) {
+      if (sitemapUrlPattern && !sitemapUrlPattern.test(child.url)) continue;
+      if (modifiedSince && child.lastModified && child.lastModified < modifiedSince) continue;
+      queue.push({ url: child.url, depth: item.depth + 1 });
+    }
   }
 
   return result;
 }
 
+/**
+ * Mục này là một sitemap con trá hình hay là một trang tin?
+ *
+ * Cố ý hỏi `jobUrlPattern` TRƯỚC: nguồn nào đặt tin ở URL đuôi `.xml` thì mẫu
+ * của nó khớp, và mục đó vẫn được coi là tin. Chỉ khi đã chắc chắn không phải
+ * tin thì đuôi `.xml` mới có nghĩa là "đây là file sitemap khác".
+ */
+function isNestedSitemap(url: string, jobUrlPattern?: RegExp): boolean {
+  if (jobUrlPattern?.test(url)) return false;
+  return /\.xml(?:\.gz)?(?:[?#]|$)/i.test(url);
+}
+
 /** Tách riêng để test được mà không cần mạng. */
-export const __testing = { parseEntries, isIndex, URL_BLOCK_RE, SITEMAP_BLOCK_RE };
+export const __testing = {
+  parseEntries,
+  isIndex,
+  isNestedSitemap,
+  URL_BLOCK_RE,
+  SITEMAP_BLOCK_RE,
+};

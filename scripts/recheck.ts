@@ -8,6 +8,7 @@ import {
 } from '@/constants/crawl';
 import { HostAbortedError, PoliteFetcher, RobotsDisallowedError } from '@/crawler/fetcher';
 import { extractJobPostings } from '@/crawler/jsonld';
+import { applyFetchQuirks } from '@/crawler/sources/registry';
 import { CrawlTrigger, JobStatus, RunStatus, StatusReason } from '@/enums';
 import { compileField, matchJob } from '@/lib/field-match';
 
@@ -135,7 +136,8 @@ async function main(): Promise<void> {
       etag: true,
       lastModifiedHdr: true,
       missCount: true,
-      source: { select: { code: true, kind: true, config: true } },
+      // `homeUrl` chỉ dùng để biết host nào phải đi bằng curl — xem applyFetchQuirks.
+      source: { select: { code: true, kind: true, config: true, homeUrl: true } },
     },
     // Tin chưa kiểm lần nào đi trước, rồi tới tin sắp hết hạn nhất. Khi ngân
     // sách không đủ cho tất cả thì đây là thứ tự đáng tiêu tiền nhất.
@@ -168,6 +170,13 @@ async function main(): Promise<void> {
   }
 
   const fetcher = new PoliteFetcher();
+  // Máy kiểm gọi thẳng vào trang chi tiết, không đi qua adapter nào — nên nó
+  // phải tự khai lại những host cần curl. Thiếu dòng này thì đúng các nguồn mà
+  // crawler đọc được sẽ trả 403 ở đây, và tin còn sống bị kết luận là đã chết.
+  applyFetchQuirks(
+    fetcher,
+    queue.map((posting) => posting.source),
+  );
   const run =
     dryRun || queue.length === 0
       ? null

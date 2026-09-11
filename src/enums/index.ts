@@ -126,11 +126,16 @@ export type SalaryPeriod = (typeof SalaryPeriod)[keyof typeof SalaryPeriod];
  *                    Đây là đường chính: 6/6 nguồn đã kiểm đều có JobPosting,
  *                    vì Google bắt buộc thế để lên Google Jobs. TECHSTACK.md §2
  *   list-jsonld    — không có sitemap dùng được, phải bò qua trang danh sách
+ *   manual         — KHÔNG có máy nào đi lấy. Người dùng tự dán tin vào bằng
+ *                    `npm run ingest`. Dành cho nơi mà robots.txt đã nói không
+ *                    (Facebook, LinkedIn) nhưng người dùng thì vẫn đọc được
+ *                    bằng chính tài khoản của họ. Xem `scripts/ingest.ts`.
  */
 export const SourceKind = {
   API: 'api',
   SITEMAP_JSONLD: 'sitemap-jsonld',
   LIST_JSONLD: 'list-jsonld',
+  MANUAL: 'manual',
 } as const;
 export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
 

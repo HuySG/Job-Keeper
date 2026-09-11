@@ -1,6 +1,6 @@
 import { SOURCE_SEEDS } from '@/constants/source';
 import { PoliteFetcher } from '@/crawler/fetcher';
-import { getAdapter } from '@/crawler/sources/registry';
+import { applyFetchQuirks, getAdapter } from '@/crawler/sources/registry';
 import type { SourceConfig } from '@/crawler/sources/types';
 import { createBlobStore } from '@/crawler/storage/blob';
 import type { SourceKind } from '@/enums';
@@ -56,6 +56,7 @@ async function main(): Promise<void> {
   };
 
   const fetcher = new PoliteFetcher();
+  applyFetchQuirks(fetcher, [source]);
   const adapter = getAdapter(source);
 
   console.log(`\n┌─ ${seed.name} (${seed.code}) · ${adapter.kind}`);

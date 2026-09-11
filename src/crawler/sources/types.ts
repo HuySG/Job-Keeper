@@ -114,4 +114,23 @@ export interface GenericJsonLdConfig {
    * mọi URL đều bị coi là "cũ hơn mốc" và nguồn im lặng trả về 0 tin.
    */
   ignoreLastmod?: boolean;
+
+  /**
+   * Đi bằng `curl` thay vì `fetch()` của Node cho host của nguồn này.
+   *
+   * Dùng khi robots.txt CHO PHÉP nhưng tầng biên chặn `undici` vì dấu vân tay
+   * TLS. Đọc kỹ phần RANH GIỚI ở `PoliteFetcher.useCurlFor` trước khi bật —
+   * đây không phải nguỵ trang, và có một lằn ranh rõ ràng không được bước qua.
+   *
+   * Đo thật 11/09/2026, cùng URL cùng một User-Agent trung thực của ta:
+   *   glints.com/sitemap_index.xml   Node fetch 403 (1,3 MB trang tường lửa) · curl 200 (374 KB XML)
+   *   jobsgo.vn/sitemap_index.xml    Node fetch 403                          · curl 200 (1.233 B XML)
+   */
+  useCurl?: boolean;
+
+  /**
+   * Nguồn khai sai `addressRegion`/`addressLocality`, chỉ `streetAddress` mang
+   * tỉnh thật. Xem bằng chứng ở `ExtractLocationsOptions.trustStreetFirst`.
+   */
+  trustStreetFirst?: boolean;
 }

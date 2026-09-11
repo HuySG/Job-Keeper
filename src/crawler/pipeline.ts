@@ -20,7 +20,7 @@ import {
 import { HostAbortedError, PoliteFetcher } from './fetcher';
 import type { NormalizedJob } from './normalize';
 import { toMatchKey } from './normalize/text';
-import { getAdapter } from './sources/registry';
+import { applyFetchQuirks, getAdapter } from './sources/registry';
 import type { SourceConfig } from './sources/types';
 import { createBlobStore, type BlobStore } from './storage/blob';
 
@@ -87,6 +87,7 @@ export async function runCrawl(options: CrawlOptions = {}): Promise<CrawlSummary
   }
 
   const fetcher = new PoliteFetcher();
+  applyFetchQuirks(fetcher, sources);
   const blobs = dryRun ? createBlobStore('null') : createBlobStore();
 
   const run = dryRun ? null : await db.crawlRun.create({ data: { trigger } });
@@ -302,7 +303,19 @@ async function crawlOneSource(args: CrawlSourceArgs): Promise<CrawlSummary['bySo
 
 async function loadSources(codes?: string[]): Promise<SourceConfig[]> {
   const rows = await db.source.findMany({
-    where: { isActive: true, ...(codes?.length ? { code: { in: codes } } : {}) },
+    where: {
+      isActive: true,
+      // Nguồn nhập tay KHÔNG có adapter và cố ý thế: robots.txt của Facebook và
+      // LinkedIn đã nói không, nên không một request nào của crawler được đi
+      // tới đó. Chúng vẫn `isActive` để tin đã nhập được tính là còn sống và
+      // hiện ở trang Ngành — chỉ là đường vào của chúng là `npm run ingest`.
+      //
+      // Lọc ở ĐÂY chứ không ở `getAdapter`: để `getAdapter` ném lỗi thì mỗi
+      // lượt crawl lại có hai nguồn báo FAILED, và cái log ấy sẽ dạy người đọc
+      // bỏ qua lỗi — thứ đắt hơn nhiều so với một dòng where.
+      kind: { not: SourceKind.MANUAL },
+      ...(codes?.length ? { code: { in: codes } } : {}),
+    },
     orderBy: { priority: 'asc' },
   });
 
@@ -352,8 +365,11 @@ function readTargeting(
   // Còn thu hẹp theo URL thì suy ngược được — chính URL của tin đã lưu trả lời
   // được câu "tin này có nằm trong lát cắt không", nên tầng 2 vẫn dùng được,
   // chỉ là thu hẹp phạm vi đối chiếu lại cho đúng.
+  // Cờ `i` phải KHỚP với chỗ adapter biên dịch cùng mẫu này (generic-jsonld).
+  // Lệch nhau là `reapMissing` đối chiếu trên một lát cắt hẹp hơn lát vừa
+  // quét, rồi đóng oan đúng những tin vừa mới thu về.
   if (config.urlIncludePattern) {
-    return { mode: 'url', pattern: new RegExp(config.urlIncludePattern) };
+    return { mode: 'url', pattern: new RegExp(config.urlIncludePattern, 'i') };
   }
 
   return { mode: 'none' };
@@ -412,7 +428,7 @@ async function reapMissing(
  * Trả 'created' hay 'updated' để đếm đúng — con số "bao nhiêu tin MỚI" là thứ
  * duy nhất cho biết crawler còn sống hay đã chết lặng lẽ.
  */
-async function upsertJob(
+export async function upsertJob(
   source: SourceConfig,
   job: NormalizedJob,
   rawKey: string | null,

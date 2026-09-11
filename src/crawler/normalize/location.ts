@@ -160,6 +160,32 @@ export function isRemoteText(input: string | null | undefined): boolean {
   return /\b(remote|tu xa|lam viec tai nha|work from home|wfh|telecommute)\b/.test(text);
 }
 
+export interface ExtractLocationsOptions {
+  /**
+   * Tra `streetAddress` TRƯỚC `addressRegion`/`addressLocality`.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * Chỉ bật cho nguồn đã ĐO ĐƯỢC là hai ô cấp tỉnh của nó không đáng tin.
+   *
+   * Đo thật 11/09/2026, ba tin liên tiếp của `vieclamnhamay.vn`:
+   *
+   *   streetAddress "435 Quốc lộ 13, ... TP. Hồ Chí Minh"  region/locality "Hà Nội"
+   *   streetAddress "1578 Trần Văn Giàu, Bình Chánh, HCM"  region/locality "HCMC"
+   *   streetAddress "331 Nguyễn Trọng Tuyển, ... TP HCM"   region/locality "Bình Dương"
+   *
+   * Cả ba tin đều ở TP.HCM còn cả ba ô cấp tỉnh đều nói một tỉnh khác. Đây
+   * KHÔNG phải chuyện đảo region/locality như CareerViet — chỗ đó đảo thì thứ
+   * tự tra vẫn cứu được. Ở đây hai ô ấy là RÁC, và chỉ `streetAddress` mới
+   * mang tỉnh thật.
+   *
+   * Hậu quả nếu không bật: tin HCM bị gán Hà Nội/Bình Dương rồi biến mất khỏi
+   * trang Ngành (đang lọc `thu-mua-hcm`), còn tin tỉnh khác thì lọt vào. Sai
+   * theo cả hai chiều, và không một lỗi nào để lần ra.
+   * ─────────────────────────────────────────────────────────────────────────
+   */
+  trustStreetFirst?: boolean;
+}
+
 /**
  * Bóc mọi địa điểm từ `jobLocation` của JSON-LD.
  *
@@ -167,7 +193,10 @@ export function isRemoteText(input: string | null | undefined): boolean {
  * nhánh. Lấy phần tử đầu rồi thôi là mất tin ở các tỉnh còn lại — đúng những
  * tỉnh mà dữ liệu đang thưa nhất.
  */
-export function extractLocations(jobLocation: unknown): { raw: string; province: Province | null }[] {
+export function extractLocations(
+  jobLocation: unknown,
+  options: ExtractLocationsOptions = {},
+): { raw: string; province: Province | null }[] {
   const results: { raw: string; province: Province | null }[] = [];
   const seen = new Set<string>();
 
@@ -194,7 +223,10 @@ export function extractLocations(jobLocation: unknown): { raw: string; province:
       const street = clean(str(addr['streetAddress']));
       const combined = [street, locality, region].filter(Boolean).join(', ');
       // Thử LẦN LƯỢT chứ không chỉ ô đầu tiên có chữ — xem chú thích ở `push`.
-      if (combined) push(combined, [region, locality, combined]);
+      const order = options.trustStreetFirst
+        ? [street, combined, region, locality]
+        : [region, locality, combined];
+      if (combined) push(combined, order.filter(Boolean));
       return;
     }
 

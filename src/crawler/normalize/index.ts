@@ -81,6 +81,11 @@ export interface NormalizeContext {
     skills?: string[];
     workMode?: WorkMode | null;
   };
+  /**
+   * Nguồn khai sai cấp tỉnh, chỉ `streetAddress` là đáng tin.
+   * Xem `ExtractLocationsOptions.trustStreetFirst` để biết bằng chứng.
+   */
+  trustStreetFirst?: boolean;
 }
 
 /**
@@ -136,7 +141,9 @@ export function normalizeJobPosting(
   const expiresAt = parseDate(str(ld.validThrough), { endOfDay: true });
 
   // ── Địa điểm ───────────────────────────────────────────────────────────────
-  const locations = extractLocations(ld.jobLocation);
+  const locations = extractLocations(ld.jobLocation, {
+    trustStreetFirst: ctx.trustStreetFirst ?? false,
+  });
   const remote =
     String(ld.jobLocationType ?? '').toUpperCase() === 'TELECOMMUTE' ||
     isRemoteText(title) ||
@@ -277,28 +284,65 @@ function toNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+/** "11-09-2026" và "11/09/2026" — ngày TRƯỚC tháng, kiểu Việt Nam. */
+const DMY_RE = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/;
+
 /**
- * Đọc ngày theo nhiều dạng gặp thật: "2026-08-06", "2026-09-05T23:59:59+07:00".
+ * Đọc ngày theo nhiều dạng gặp thật: "2026-08-06", "2026-09-05T23:59:59+07:00",
+ * và "11-09-2026" (ngày-tháng-năm).
  *
  * Ngày trần không có giờ: `new Date("2026-08-06")` được hiểu là UTC nên ở
  * Việt Nam (UTC+7) sẽ hiện thành 07/08 — lệch một ngày. Với `validThrough`
  * thì lệch ấy nghĩa là tin bị coi là hết hạn sớm mất một ngày, nên ngày trần
  * được đẩy về cuối ngày.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * VÌ SAO PHẢI TỰ ĐỌC DẠNG NGÀY-THÁNG-NĂM, thay vì phó cho `new Date()`
+ *
+ * Đo thật 11/09/2026 trên `vieclamnhamay.vn`, JSON-LD khai `datePosted` dạng
+ * "11-09-2026" (11 tháng 9). Đưa thẳng vào `new Date()` thì V8 đoán theo lối
+ * Mỹ, tháng trước ngày:
+ *
+ *     new Date("11-09-2026")  ->  08/11/2026   (lệch gần hai tháng, và ở TƯƠNG LAI)
+ *     new Date("25-12-2026")  ->  Invalid Date (không có tháng 25)
+ *
+ * Hai kiểu sai này còn tệ hơn một kiểu sai: ngày 1–12 thì lặng lẽ ra số khác,
+ * ngày 13–31 thì rơi về `null` rồi `postedAt` lấy giờ chạy crawler. Nghĩa là
+ * cùng một nguồn cho ra hai lối hỏng tuỳ theo hôm đó là ngày mấy — kiểu lỗi
+ * gần như không thể lần ra từ con số thống kê cuối cùng.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 function parseDate(input: string, opts: { endOfDay?: boolean } = {}): Date | null {
   const text = input.trim();
   if (!text) return null;
 
+  const time = opts.endOfDay ? '23:59:59' : '00:00:00';
+
+  const dmy = DMY_RE.exec(text);
+  if (dmy) {
+    const [, day, month, year] = dmy;
+    const d = Number(day);
+    const m = Number(month);
+    // Ngày > 12 ở ô THÁNG là bằng chứng nguồn dùng tháng-ngày-năm chứ không
+    // phải ngày-tháng-năm. Không đoán bừa: trả null để `parseStatus` báo
+    // "thiếu/sai datePosted", vì một ngày bịa còn hại hơn một ngày trống.
+    if (d < 1 || d > 31 || m < 1 || m > 12) return null;
+    return clampYear(
+      new Date(`${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}T${time}+07:00`),
+    );
+  }
+
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text);
-  const iso = dateOnly ? `${text}T${opts.endOfDay ? '23:59:59' : '00:00:00'}+07:00` : text;
+  const iso = dateOnly ? `${text}T${time}+07:00` : text;
 
-  const date = new Date(iso);
+  return clampYear(new Date(iso));
+}
+
+/** Chặn ngày phi lý: nguồn thỉnh thoảng trả 1970 hoặc 2099. */
+function clampYear(date: Date): Date | null {
   if (Number.isNaN(date.getTime())) return null;
-
-  // Chặn ngày phi lý: nguồn thỉnh thoảng trả 1970 hoặc 2099
   const year = date.getUTCFullYear();
   if (year < 2000 || year > 2100) return null;
-
   return date;
 }
 

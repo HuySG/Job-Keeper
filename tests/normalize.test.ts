@@ -281,3 +281,96 @@ describe('normalizeJobPosting trên dữ liệu THẬT của ba sàn', () => {
     expect(job.postedAt.toISOString()).toBe('2026-08-05T17:00:00.000Z'); // 00:00:00+07
   });
 });
+
+/**
+ * Hai bẫy đo được ở vieclamnhamay.vn ngày 11/09/2026. Cả hai đều hỏng LẶNG LẼ:
+ * không ném lỗi, không đổi parseStatus, chỉ cho ra số sai.
+ */
+/**
+ * Hai bẫy đo được ở vieclamnhamay.vn ngày 11/09/2026. Cả hai hỏng LẶNG LẼ:
+ * không ném lỗi, không đổi parseStatus, chỉ cho ra số sai.
+ *
+ * Mốc so sánh viết dưới dạng UTC có chủ ý: ngày trần được neo vào +07:00 nên
+ * "11/09 giờ Việt Nam" chính là "10/09T17:00Z". So bằng `.slice(0, 10)` của
+ * chuỗi ISO là so nhầm sang múi giờ khác và sẽ luôn lệch một ngày.
+ */
+describe('bẫy dữ liệu của vieclamnhamay.vn', () => {
+  const base = {
+    '@type': 'JobPosting',
+    title: 'Chuyên viên thu mua',
+    description: 'Mô tả công việc thu mua vật tư.',
+    hiringOrganization: { '@type': 'Organization', name: 'Công ty Tài Ký' },
+  };
+  const ctx = {
+    pageUrl: 'https://vieclamnhamay.vn/viec-lam/249971-abc',
+    externalIdFromUrl: () => '249971',
+  };
+
+  it('đọc datePosted dạng ngày-tháng-năm chứ không đoán theo lối Mỹ', () => {
+    // new Date("11-09-2026") của V8 cho ra 08/11/2026 — lệch gần hai tháng.
+    const job = normalizeJobPosting({ ...base, datePosted: '11-09-2026' }, ctx);
+    expect(job.postedAt.toISOString()).toBe('2026-09-10T17:00:00.000Z');
+  });
+
+  it('đọc được ngày > 12 vốn làm new Date() trả Invalid Date', () => {
+    const job = normalizeJobPosting(
+      { ...base, datePosted: '25-12-2026', validThrough: '31-12-2026' },
+      ctx,
+    );
+    expect(job.postedAt.toISOString()).toBe('2026-12-24T17:00:00.000Z');
+    // validThrough được đẩy về cuối ngày, nên 31/12 giờ VN = 31/12T16:59:59Z.
+    expect(job.expiresAt?.toISOString()).toBe('2026-12-31T16:59:59.000Z');
+    expect(job.parseError ?? '').not.toContain('datePosted');
+  });
+
+  it('không nhận ô THÁNG > 12 — trả null thay vì đảo bừa hai ô', () => {
+    const job = normalizeJobPosting({ ...base, datePosted: '09-25-2026' }, ctx);
+    expect(job.parseError).toContain('datePosted');
+  });
+
+  it('vẫn đọc đúng ISO như cũ', () => {
+    const job = normalizeJobPosting({ ...base, datePosted: '2026-08-04' }, ctx);
+    expect(job.postedAt.toISOString()).toBe('2026-08-03T17:00:00.000Z');
+  });
+
+  /**
+   * Ca thật: địa chỉ ở TP.HCM nhưng cả hai ô cấp tỉnh khai "Hà Nội".
+   *
+   * Chọn đúng mẫu này làm test vì trong ba tin đã đo, đây là tin DUY NHẤT chứng
+   * minh được lỗi. Hai tin kia khai "HCMC" và "Bình Dương" — mà "Bình Dương" là
+   * bí danh hợp lệ của ho-chi-minh sau sáp nhập 2025, nên chúng ra đúng kết quả
+   * dù đi đường nào, và không phân biệt được gì cả.
+   */
+  it('trustStreetFirst lấy tỉnh từ streetAddress khi ô cấp tỉnh khai sai tỉnh', () => {
+    const jobLocation = {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: '435 Quốc lộ 13, Khu phố 24, Phường Hiệp Bình, TP. Hồ Chí Minh, Việt Nam',
+        addressLocality: 'Hà Nội',
+        addressRegion: 'Hà Nội',
+      },
+    };
+
+    expect(extractLocations(jobLocation)[0]?.province?.slug).toBe('ha-noi');
+    expect(extractLocations(jobLocation, { trustStreetFirst: true })[0]?.province?.slug).toBe(
+      'ho-chi-minh',
+    );
+  });
+
+  it('trustStreetFirst KHÔNG làm hỏng nguồn khai địa chỉ đúng chiều', () => {
+    // ITviec/TopDev: tỉnh ở region, phường ở locality, street không có tên tỉnh.
+    const jobLocation = {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Toà nhà E.Town, 364 Cộng Hoà',
+        addressLocality: 'Phường Tân Bình',
+        addressRegion: 'Hồ Chí Minh',
+      },
+    };
+    expect(extractLocations(jobLocation, { trustStreetFirst: true })[0]?.province?.slug).toBe(
+      'ho-chi-minh',
+    );
+  });
+});

@@ -176,3 +176,61 @@ describe('walkSitemap', () => {
     expect(result.sitemapsFetched).toBe(1);
   });
 });
+
+/**
+ * Sitemap LỒNG NHAU nhưng khai sai thẻ bọc — ca thật của vieclamnhamay.vn.
+ *
+ * Đo 11/09/2026: `tin-tuyen-dung.xml` là `<urlset>` gồm 39 mục, mục nào cũng là
+ * một file `tin-tuyen-dung-pN.xml`. Chỉ nhìn thẻ bọc thì cả 39 mục rơi vào vòng
+ * xử URL tin, trượt `jobUrlPattern`, và nguồn im lặng trả 0 URL.
+ */
+describe('sitemap lồng nhau khai sai thẻ bọc', () => {
+  const URLSET_OF_SITEMAPS = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://vieclamnhamay.vn/tin-tuyen-dung-p1.xml</loc></url>
+  <url><loc>https://vieclamnhamay.vn/tin-tuyen-dung-p2.xml</loc></url>
+</urlset>`;
+
+  const JOBS_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://vieclamnhamay.vn/viec-lam/249957-chuyen-vien-thu-mua</loc><lastmod>2026-09-11T08:00:00+07:00</lastmod></url>
+  <url><loc>https://vieclamnhamay.vn/viec-lam/249969-ke-toan-thue</loc></url>
+</urlset>`;
+
+  const pages = {
+    'https://vieclamnhamay.vn/tin-tuyen-dung.xml': URLSET_OF_SITEMAPS,
+    'https://vieclamnhamay.vn/tin-tuyen-dung-p1.xml': JOBS_XML,
+    'https://vieclamnhamay.vn/tin-tuyen-dung-p2.xml': JOBS_XML,
+  };
+
+  const jobUrlPattern = /\/viec-lam\/\d+-[a-z0-9-]+$/;
+
+  it('đi tiếp vào file .xml nằm trong <urlset> thay vì coi chúng là tin', async () => {
+    const { fetcher, calls } = fakeFetcher(pages);
+    const result = await walkSitemap(fetcher, 'https://vieclamnhamay.vn/tin-tuyen-dung.xml', {
+      jobUrlPattern,
+    });
+
+    expect(calls).toContain('https://vieclamnhamay.vn/tin-tuyen-dung-p1.xml');
+    expect(result.entries).toHaveLength(2); // hai file trùng nhau, đã khử
+    expect(result.entries.every((e) => e.url.includes('/viec-lam/'))).toBe(true);
+  });
+
+  it('KHÔNG nhận nhầm URL tin thành sitemap con', () => {
+    const { isNestedSitemap } = __testing;
+    expect(isNestedSitemap('https://vieclamnhamay.vn/tin-tuyen-dung-p1.xml', jobUrlPattern)).toBe(true);
+    expect(isNestedSitemap('https://vieclamnhamay.vn/viec-lam/249957-chuyen-vien-thu-mua', jobUrlPattern)).toBe(false);
+    // Tin có đuôi .xml mà khớp jobUrlPattern thì vẫn là TIN — mẫu được hỏi trước.
+    expect(isNestedSitemap('https://x.vn/viec-lam/1-abc', /\/viec-lam\//)).toBe(false);
+  });
+
+  it('sitemapUrlPattern vẫn lọc được các file lồng kiểu này', async () => {
+    const { fetcher, calls } = fakeFetcher(pages);
+    await walkSitemap(fetcher, 'https://vieclamnhamay.vn/tin-tuyen-dung.xml', {
+      jobUrlPattern,
+      sitemapUrlPattern: /p1\.xml/,
+    });
+    expect(calls).toContain('https://vieclamnhamay.vn/tin-tuyen-dung-p1.xml');
+    expect(calls).not.toContain('https://vieclamnhamay.vn/tin-tuyen-dung-p2.xml');
+  });
+});
