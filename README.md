@@ -135,6 +135,7 @@ Thêm một thư viện biểu đồ cho vài chục hình chữ nhật là đá
 | `npm run crawl -- --full` | Quét đầy đủ — **và chỉ khi đó mới dám đóng tin đã biến mất** |
 | `npm run crawl -- --dry` | Không ghi DB, chỉ in ra |
 | `npm run reparse` | **Tính lại toàn bộ từ blob đã lưu, không gọi mạng.** `-- --failed --dry` |
+| `npm run repair:salary` | Tính lại lương cho tin **không có blob**, từ `salaryRaw`. Mặc định chạy khô; `-- --apply` để ghi, kèm `JobAudit` |
 | `npm run db:push` / `db:seed` / `db:studio` | Thao tác CSDL |
 | `... -- --ws swe` | **Chọn workspace** cho mọi lệnh trên (mặc định `bae`). Xem bên dưới |
 | `npm test` | 263 test, chạy trên fixture JSON-LD **thật** của 3 sàn |

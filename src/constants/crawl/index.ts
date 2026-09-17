@@ -57,6 +57,13 @@ export const MAX_SITEMAP_DEPTH = 3;
 export const MAX_DETAIL_PAGES_PER_SOURCE = 300;
 
 /**
+ * Số tin LIÊN TIẾP ghi hỏng thì dừng cả nguồn. Một tin hỏng chỉ là lỗi của
+ * tin đó; năm tin liền nhau thì gần như chắc là CSDL có chuyện, và cào tiếp là
+ * gõ cửa sàn để rồi vứt kết quả. Xem `crawler/failure-streak.ts`.
+ */
+export const MAX_CONSECUTIVE_WRITE_FAILURES = 5;
+
+/**
  * User-Agent PHẢI định danh được và liên hệ được. Không giả làm Chrome.
  * Đây vừa là phép lịch sự vừa là tự bảo vệ: nguồn nào khó chịu thì họ email
  * cho ta trước khi họ chặn ta.

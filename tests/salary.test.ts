@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { parseNumber, parseSalaryJsonLd, parseSalaryText } from '@/crawler/normalize/salary';
+import {
+  parseNumber,
+  parseSalaryJsonLd,
+  parseSalaryText,
+  replaceSalaryProblem,
+  salaryFromRaw,
+} from '@/crawler/normalize/salary';
 
 import topcv from './fixtures/topcv-job.json';
 import topdev from './fixtures/topdev-job.json';
@@ -62,10 +68,10 @@ describe('parseSalaryText', () => {
   });
 
   it('chữ "m" đầu một từ khác không phải đơn vị triệu', () => {
-    // "20 months" không được thành 20 triệu.
+    // "20 months" không được thành 20 triệu — nó là 20 đồng, tức ngoài khoảng.
     const s = parseSalaryText('20 months');
-    expect(s.min).toBe(20);
     expect(s.outOfRange).toBe(true);
+    expect(s.min).not.toBe(20 * TR);
   });
 
   it('"Upto" chỉ cho trần, không có sàn', () => {
@@ -132,6 +138,17 @@ describe('parseSalaryText', () => {
     // 900 triệu/tháng: gần như chắc chắn parser đọc nhầm đơn vị
     expect(parseSalaryText('900 triệu').outOfRange).toBe(true);
     expect(parseSalaryText('20 triệu').outOfRange).toBe(false);
+  });
+
+  it('số ngoài khoảng KHÔNG được công khai — cờ thôi thì vẫn lọt vào trung vị', () => {
+    // Đo 17/09/2026: thống kê chỉ lọc theo `salaryIsPublic`, nên số bị cờ mà
+    // vẫn công khai thì vẫn vào p25/trung vị/p75. 185 tin của bae như thế.
+    const s = parseSalaryText('900 triệu');
+    expect(s.isPublic).toBe(false);
+    expect(s.min).toBeNull();
+    expect(s.max).toBeNull();
+    // Giữ chuỗi gốc để còn soi lại vì sao bị loại.
+    expect(s.raw).toBe('900 triệu');
   });
 });
 
@@ -279,5 +296,59 @@ describe('tỷ giá — biến môi trường RỖNG không được thành 0', 
     } finally {
       process.env.USD_VND_RATE = saved;
     }
+  });
+});
+
+describe('lương 0 đồng từ JSON-LD là "không đọc được", không phải số 0', () => {
+  it('minValue/maxValue = 0 -> không công khai', () => {
+    const s = parseSalaryJsonLd({ currency: 'VND', value: { minValue: 0, maxValue: 0, unitText: 'MONTH' } });
+    expect(s?.isPublic ?? false).toBe(false);
+    expect(s?.min ?? null).toBeNull();
+  });
+});
+
+describe('salaryFromRaw — tính lại từ salaryRaw đã lưu (tin không có blob)', () => {
+  it('JSON baseSalary: tính lại bằng tỷ giá hiện hành', () => {
+    // Nguyên văn salaryRaw của một tin VNW cào trên CI, lưu với fxRate = 0.
+    const raw =
+      '{"@type":"MonetaryAmount","currency":"USD","value":{"@type":"QuantitativeValue","minValue":600,"maxValue":1000,"unitText":"MONTH"}}';
+    const s = salaryFromRaw(raw);
+    expect(s?.isPublic).toBe(true);
+    expect(s?.min).toBe(600 * 25_000);
+    expect(s?.max).toBe(1000 * 25_000);
+    expect(s?.fxRate).toBe(25_000);
+    expect(s?.raw).toBe(raw);
+  });
+
+  it('chuỗi văn bản: đọc như lương viết tay', () => {
+    expect(salaryFromRaw('15 - 20 triệu')).toMatchObject({ min: 15 * TR, max: 20 * TR });
+  });
+
+  it('JSON bị cắt cụt ở 300 ký tự thì không đoán — trả null để bỏ qua', () => {
+    expect(salaryFromRaw('{"@type":"MonetaryAmount","currency":"VND","value":{"minVal')).toBeNull();
+  });
+
+  it('không có chuỗi gốc thì không có gì để tính', () => {
+    expect(salaryFromRaw(null)).toBeNull();
+  });
+});
+
+describe('replaceSalaryProblem — chỉ thay đúng mục lương trong parseError', () => {
+  const bad = parseSalaryText('900 triệu');
+  const good = parseSalaryText('20 triệu');
+
+  it('bỏ mục lương cũ, giữ nguyên các lỗi khác', () => {
+    const before = 'thiếu description; lương ngoài khoảng hợp lý: {"currency":"USD"}; thiếu jobLocation';
+    expect(replaceSalaryProblem(before, good)).toBe('thiếu description; thiếu jobLocation');
+  });
+
+  it('chỉ còn mỗi lỗi lương mà nay đã hết -> null', () => {
+    expect(replaceSalaryProblem('lương ngoài khoảng hợp lý: x', good)).toBeNull();
+  });
+
+  it('lương vẫn ngoài khoảng -> ghi lại đúng một mục, với chuỗi gốc mới', () => {
+    expect(replaceSalaryProblem('lương ngoài khoảng hợp lý: cũ', bad)).toBe(
+      'lương ngoài khoảng hợp lý: 900 triệu',
+    );
   });
 });

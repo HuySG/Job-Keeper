@@ -305,10 +305,68 @@ function fromSingleValue(
   if (typeof value === 'string') {
     const parsed = parseSalaryText(value, { currency, period });
     // "Negotiable" nằm trong value (TopDev): trả null để rơi về đường văn bản
-    // của adapter, đúng như trước.
-    return parsed.isPublic ? { ...parsed, raw } : null;
+    // của adapter, đúng như trước. Số ngoài khoảng thì vẫn trả về — không
+    // công khai, nhưng mang cờ để tin bị đánh dấu PARTIAL.
+    return parsed.isPublic || parsed.outOfRange ? { ...parsed, raw } : null;
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tính lại từ `salaryRaw` đã lưu
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tiền tố của mục lương trong `JobPosting.parseError` — một chỗ định nghĩa. */
+export const SALARY_PROBLEM = 'lương ngoài khoảng hợp lý';
+
+/** Mục lỗi lương để ghi vào `parseError`, hoặc null nếu lương không có vấn đề. */
+export function salaryProblem(salary: NormalizedSalary): string | null {
+  return salary.outOfRange ? `${SALARY_PROBLEM}: ${salary.raw}` : null;
+}
+
+/**
+ * Thay đúng mục lương trong `parseError` (các mục nối bằng "; "), giữ nguyên
+ * các lỗi khác — tính lại lương không được xoá mất "thiếu description".
+ */
+export function replaceSalaryProblem(
+  parseError: string | null,
+  salary: NormalizedSalary,
+): string | null {
+  const others = (parseError ?? '')
+    .split('; ')
+    .filter((item) => item && !item.startsWith(SALARY_PROBLEM));
+  const own = salaryProblem(salary);
+  const all = own ? [...others, own] : others;
+  return all.length > 0 ? all.join('; ') : null;
+}
+
+/**
+ * Đọc lại lương từ `JobPosting.salaryRaw` — cho tin KHÔNG có blob.
+ *
+ * `npm run reparse` tính lại từ blob thô; nhưng tin cào trên CI khi chưa khai
+ * R2 thì không có blob (đo 17/09/2026: 172 tin USD lương 0 đồng đều thế).
+ * Với chúng, `salaryRaw` là bằng chứng duy nhất còn lại:
+ *
+ *   · bắt đầu bằng "{" → là `baseSalary` JSON-LD, chính thứ `parseSalaryJsonLd`
+ *     đã đọc. Nó bị CẮT ở 300 ký tự khi lưu, nên JSON hỏng thì trả null — đoán
+ *     trên nửa object là tự bịa số.
+ *   · còn lại → là chuỗi văn bản `parseSalaryText` đã đọc.
+ */
+export function salaryFromRaw(raw: string | null): NormalizedSalary | null {
+  if (!raw) return null;
+
+  if (raw.trimStart().startsWith('{')) {
+    let baseSalary: unknown;
+    try {
+      baseSalary = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const parsed = parseSalaryJsonLd(baseSalary);
+    return { ...(parsed ?? parseSalaryText(null)), raw };
+  }
+
+  return { ...parseSalaryText(raw), raw };
 }
 
 function toNumber(value: unknown): number | null {
@@ -356,10 +414,28 @@ function finalize(input: {
   if (min !== null && max !== null && min > max) [min, max] = [max, min];
 
   // Ngoài khoảng hợp lý = gần như chắc chắn đọc sai đơn vị (nhầm "triệu" với
-  // "đồng"). Đánh dấu thay vì để số rác lọt vào trung vị.
+  // "đồng"), hoặc số 0 mà nguồn điền cho có.
   const check = (value: number | null): boolean =>
     value !== null && (value < SALARY_VND_MONTH_MIN || value > SALARY_VND_MONTH_MAX);
   const outOfRange = check(min) || check(max);
+
+  if (outOfRange) {
+    // Đánh dấu thôi là CHƯA đủ: thống kê chỉ lọc theo `salaryIsPublic`, nên
+    // số bị cờ mà vẫn công khai thì vẫn vào trung vị — đo 17/09/2026, 185 tin
+    // của bae lọt đúng như thế, phần lớn là 0 đồng. Số không đọc tin được thì
+    // coi như KHÔNG công khai; `raw` giữ lại để soi vì sao, `outOfRange` giữ
+    // lại để tin mang cờ PARTIAL. Thêm nữa: số rác không bao giờ tới được
+    // CSDL, nên không còn chuyện một con số khổng lồ tràn cột Int.
+    return {
+      ...NOT_PUBLIC,
+      currency,
+      period,
+      raw,
+      fxRate,
+      fxRateDate,
+      outOfRange: true,
+    };
+  }
 
   return {
     min,

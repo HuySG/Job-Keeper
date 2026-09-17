@@ -21,7 +21,8 @@
     "probe": "tsx scripts/probe.ts",
     "ingest": "tsx scripts/ingest.ts",
     "db:inspect": "tsx scripts/inspect.ts",
-    "measure": "tsx scripts/measure.ts"
+    "measure": "tsx scripts/measure.ts",
+    "repair:salary": "tsx scripts/repair-salary.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

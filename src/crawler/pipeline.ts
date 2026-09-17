@@ -1,5 +1,6 @@
 import { db } from '@/api/db';
 import {
+  MAX_CONSECUTIVE_WRITE_FAILURES,
   MAX_DETAIL_PAGES_PER_SOURCE,
   MAX_SITEMAP_PAGES_PER_SOURCE,
   MISS_COUNT_TO_CLOSED,
@@ -17,6 +18,7 @@ import {
   StatusReason,
 } from '@/enums';
 
+import { FailureStreak, shortError } from './failure-streak';
 import { HostAbortedError, PoliteFetcher } from './fetcher';
 import type { NormalizedJob } from './normalize';
 import { toMatchKey } from './normalize/text';
@@ -195,6 +197,7 @@ async function crawlOneSource(args: CrawlSourceArgs): Promise<CrawlSummary['bySo
   const seen = new Set<string>();
   /** true nếu adapter quét được toàn bộ danh mục; chỉ khi đó mới dám đóng tin. */
   let sweptFully = !full ? false : true;
+  const writeFailures = new FailureStreak(MAX_CONSECUTIVE_WRITE_FAILURES);
 
   try {
     const adapter = getAdapter(source);
@@ -228,7 +231,23 @@ async function crawlOneSource(args: CrawlSourceArgs): Promise<CrawlSummary['bySo
             result.created += 1;
             break;
           }
-          const outcome = await upsertJob(source, item.job, item.rawKey);
+          // Lỗi ghi của MỘT tin là lỗi của tin đó, không phải của cả nguồn —
+          // xem FailureStreak. Chỉ dừng khi nhiều tin liên tiếp cùng hỏng.
+          let outcome: 'created' | 'updated';
+          try {
+            outcome = await upsertJob(source, item.job, item.rawKey);
+          } catch (err) {
+            result.failed += 1;
+            log(`lỗi ghi: ${item.job.url} — ${shortError(err)}`);
+            if (writeFailures.fail()) {
+              throw new Error(
+                `${writeFailures.limit} tin liên tiếp ghi hỏng — dừng nguồn, nghi CSDL có vấn đề. ` +
+                  `Lỗi cuối: ${shortError(err)}`,
+              );
+            }
+            break;
+          }
+          writeFailures.ok();
           if (outcome === 'created') result.created += 1;
           else result.updated += 1;
           break;

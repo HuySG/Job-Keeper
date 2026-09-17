@@ -7,7 +7,12 @@ import { extractDistrict } from './district';
 import { inferLevel } from './level';
 import { extractLocations, isRemoteText, type Province } from './location';
 import { parseSchedule } from './schedule';
-import { parseSalaryJsonLd, parseSalaryText, type NormalizedSalary } from './salary';
+import {
+  parseSalaryJsonLd,
+  parseSalaryText,
+  salaryProblem,
+  type NormalizedSalary,
+} from './salary';
 import {
   canonicalizeUrl,
   htmlToText,
@@ -133,7 +138,8 @@ export function normalizeJobPosting(
     if (fromText.isPublic) salary = fromText;
   }
   salary ??= parseSalaryText(null);
-  if (salary.outOfRange) problems.push(`lương ngoài khoảng hợp lý: ${salary.raw}`);
+  const salaryIssue = salaryProblem(salary);
+  if (salaryIssue) problems.push(salaryIssue);
 
   // ── Ngày tháng ─────────────────────────────────────────────────────────────
   const postedAt = parseDate(str(ld.datePosted));
