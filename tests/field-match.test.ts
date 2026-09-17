@@ -159,7 +159,11 @@ describe('TP.HCM hẹp — trước sáp nhập 2025', () => {
 describe('từ điển phần mềm (workspace swe)', () => {
   const sweSeed = FIELD_SEEDS.swe.find((f) => f.slug === 'phan-mem-hcm');
   if (!sweSeed) throw new Error('thiếu seed ngành phan-mem-hcm');
-  const swe = compileField({ keywords: sweSeed.keywords, excludes: sweSeed.excludes });
+  // Chế độ `tech` — đúng chế độ ngành này khai trong profile (xem constants/profile).
+  const swe = compileField(
+    { keywords: sweSeed.keywords, excludes: sweSeed.excludes },
+    { matchKey: 'tech' },
+  );
   const sweVerdict = (title: string): string => matchJob(swe, { title }).verdict;
 
   it.each([
@@ -191,6 +195,13 @@ describe('từ điển phần mềm (workspace swe)', () => {
     ['Chuyên Viên Kinh Doanh Phần Mềm', 'kinh doanh'],
     ['Nhân Viên Lập Trình Máy CNC/ CNC Programmer', 'cnc'],
     ['Middle/Senior Embedded Software Engineer', 'embedded'],
+    // Lộ ra khi soi độ hợp CV trên CSDL swe (17/09/2026).
+    ['Test Developer C#, Python, Linux, IP Networking', 'test developer'],
+    ['Senior Systems Support Engineer C#/.Net or Java', 'support engineer'],
+    ['NHÂN VIÊN LẬP TRÌNH CAM', 'lập trình cam'],
+    ['Pattern Developer (Working at QTSC - HCM)', 'pattern developer'],
+    ['Phát Triển Mẫu (Developer)', 'phát triển mẫu'],
+    ['Business Developer For Wholesale Team', 'business developer'],
     ['Kỹ thuật viên sửa chữa iPhone', 'kỹ thuật viên'],
     ['QA Game Tester', 'tester'],
     ['Kế toán tổng hợp lương từ 16 triệu', 'không khớp từ nào'],
@@ -202,6 +213,18 @@ describe('từ điển phần mềm (workspace swe)', () => {
 
   it('"Network Engineer" không được nhận chỉ vì chữ engineer (từ xám)', () => {
     expect(sweVerdict('Network Engineer - Tech Lounge & AV')).toBe('reject');
+  });
+
+  it('chế độ tech nhận ra .NET và C# — plain thì không', () => {
+    const plain = compileField({ keywords: sweSeed.keywords, excludes: sweSeed.excludes });
+    expect(matchJob(swe, { title: 'LẬP TRÌNH VIÊN C#' }).titleHits).toContain('csharp');
+    expect(matchJob(plain, { title: 'LẬP TRÌNH VIÊN C#' }).titleHits).not.toContain('csharp');
+    expect(matchJob(swe, { title: 'Senior .NET Engineer' }).titleHits).toContain('dotnet');
+    expect(matchJob(plain, { title: 'Senior .NET Engineer' }).titleHits).not.toContain('dotnet');
+  });
+
+  it('chế độ tech: "Network Engineer" vẫn không được nhận', () => {
+    expect(matchJob(swe, { title: 'Network Engineer' }).verdict).toBe('reject');
   });
 
   it('từ điển thu mua không bị đổi bởi workspace mới', () => {

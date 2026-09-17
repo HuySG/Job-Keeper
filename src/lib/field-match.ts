@@ -1,5 +1,5 @@
 import { GRAY_PREFIX } from '@/constants/field';
-import { toMatchKey } from '@/crawler/normalize/text';
+import { toMatchKey, toTechKey } from '@/crawler/normalize/text';
 
 /**
  * Chấm một tin có thuộc "ngành của tôi" hay không.
@@ -29,7 +29,25 @@ export interface FieldDictionary {
   excludes: readonly string[];
 }
 
+/**
+ * Cách chuẩn hoá chữ trước khi so khớp.
+ *
+ *   plain — `toMatchKey`: bỏ dấu, chỉ giữ chữ và số. Mặc định; ngành thu mua.
+ *   tech  — `toTechKey`: như trên nhưng giữ nghĩa ".NET", "C#", "C++"...
+ *           Ngành lập trình (docs/plan-swe.md §4.3).
+ *
+ * Chọn theo TỪ ĐIỂN (khai ở `SavedFilter.profile.matchKey`), không theo
+ * workspace: từ điển lẫn tin phải đi qua CÙNG một hàm, lệch nhau là không khớp gì.
+ */
+export type MatchKeyMode = 'plain' | 'tech';
+
+export interface CompileOptions {
+  matchKey?: MatchKeyMode;
+}
+
 export interface CompiledField {
+  /** Hàm chuẩn hoá đã dùng cho từ điển — tin phải đi qua đúng hàm này. */
+  key: (input: string) => string;
   strong: CompiledTerm[];
   gray: CompiledTerm[];
   excludes: CompiledTerm[];
@@ -61,27 +79,31 @@ export interface MatchResult {
  * "buyer" phải bắt được "buyers", "mua hàng" phải bắt được "mua hàng hoá".
  * Chặn hai đầu thì mất một mảng lớn tin chỉ vì hậu tố.
  */
-export function compileField(dictionary: FieldDictionary): CompiledField {
+export function compileField(
+  dictionary: FieldDictionary,
+  options: CompileOptions = {},
+): CompiledField {
+  const key = options.matchKey === 'tech' ? toTechKey : toMatchKey;
   const strong: CompiledTerm[] = [];
   const gray: CompiledTerm[] = [];
 
   for (const raw of dictionary.keywords) {
     const isGray = raw.startsWith(GRAY_PREFIX);
     const label = isGray ? raw.slice(GRAY_PREFIX.length) : raw;
-    const term = compileTerm(label);
+    const term = compileTerm(label, key);
     if (!term) continue;
     (isGray ? gray : strong).push(term);
   }
 
   const excludes = dictionary.excludes
-    .map((raw) => compileTerm(raw))
+    .map((raw) => compileTerm(raw, key))
     .filter((term): term is CompiledTerm => term !== null);
 
-  return { strong, gray, excludes };
+  return { key, strong, gray, excludes };
 }
 
-function compileTerm(label: string): CompiledTerm | null {
-  const key = toMatchKey(label);
+function compileTerm(label: string, toKey: (input: string) => string): CompiledTerm | null {
+  const key = toKey(label);
   if (!key) return null;
   // `key` chỉ còn chữ, số và khoảng trắng sau toMatchKey nên không cần thoát
   // ký tự đặc biệt — nhưng vẫn thoát cho chắc, phòng khi toMatchKey đổi.
@@ -95,8 +117,8 @@ export interface JobText {
 }
 
 export function matchJob(field: CompiledField, job: JobText): MatchResult {
-  const titleKey = toMatchKey(job.title);
-  const descKey = job.description ? toMatchKey(job.description) : '';
+  const titleKey = field.key(job.title);
+  const descKey = job.description ? field.key(job.description) : '';
 
   const blocked = field.excludes.find((term) => term.re.test(titleKey));
   if (blocked) {

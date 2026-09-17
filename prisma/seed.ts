@@ -1,11 +1,13 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { db } from '@/api/db';
 import { FIELD_SEEDS } from '@/constants/field';
+import { SKILL_SEEDS } from '@/constants/skill';
 import { sourceSeedsFor } from '@/constants/source';
 import { DEFAULT_WORKSPACE } from '@/constants/workspace';
 import { PROVINCES, REMOTE_SLUG } from '@/crawler/normalize/location';
 import { toMatchKey } from '@/crawler/normalize/text';
+import { CvProfileSchema } from '@/lib/cv-profile';
 
 import { loadEnv } from '../scripts/_env';
 
@@ -97,6 +99,29 @@ async function main(): Promise<void> {
 
   console.log(`✓ ${PROVINCES.length} tỉnh/thành + 1 mục "làm từ xa", ${aliasCount} bí danh`);
 
+  // ── Kỹ năng ────────────────────────────────────────────────────────────────
+  //
+  // Dữ liệu tham chiếu như nguồn: tạo mới hoặc cập nhật theo mã nguồn, không xoá
+  // bí danh đã thêm tay bằng SQL. Workspace bae không có kỹ năng nào.
+  let skillAliasCount = 0;
+  for (const seed of SKILL_SEEDS[ws]) {
+    const row = await db.skill.upsert({
+      where: { slug: seed.slug },
+      update: { name: seed.name, category: seed.category },
+      create: { slug: seed.slug, name: seed.name, category: seed.category },
+    });
+    for (const alias of seed.aliases) {
+      const raw = alias.trim().toLowerCase();
+      await db.skillAlias.upsert({
+        where: { raw },
+        update: { skillId: row.id },
+        create: { raw, skillId: row.id },
+      });
+      skillAliasCount += 1;
+    }
+  }
+  console.log(`✓ ${SKILL_SEEDS[ws].length} kỹ năng, ${skillAliasCount} bí danh`);
+
   // ── Ngành đã định nghĩa ────────────────────────────────────────────────────
   //
   // CHỈ TẠO MỚI, không ghi đè — trừ khi gọi `--force-fields`.
@@ -111,6 +136,9 @@ async function main(): Promise<void> {
   const forceFields = process.argv.includes('--force-fields');
 
   for (const seed of FIELD_SEEDS[ws]) {
+    // Hồ sơ hỏng thì dừng ngay ở đây, nêu đúng khoá — thay vì để bộ chấm lặng
+    // lẽ cho mọi tin 0 điểm.
+    if (seed.profile) CvProfileSchema.parse(seed.profile);
     const data = {
       name: seed.name,
       keywords: [...seed.keywords],
@@ -118,6 +146,7 @@ async function main(): Promise<void> {
       provinces: [...seed.provinces],
       includeNoSalary: seed.includeNoSalary,
       maxAgeDays: seed.maxAgeDays,
+      profile: seed.profile ? (seed.profile as Prisma.InputJsonValue) : Prisma.DbNull,
     };
     const existing = await db.savedFilter.findUnique({ where: { slug: seed.slug } });
 
@@ -130,7 +159,8 @@ async function main(): Promise<void> {
     const state = !existing ? 'tạo mới' : forceFields ? 'ĐÃ GHI ĐÈ' : 'giữ nguyên bản trong CSDL';
     console.log(
       `✓ ngành "${seed.slug}" (${state}): ${seed.keywords.length} từ nhận, ` +
-        `${seed.excludes.length} từ loại, tỉnh ${seed.provinces.join(', ') || 'mọi nơi'}`,
+        `${seed.excludes.length} từ loại, tỉnh ${seed.provinces.join(', ') || 'mọi nơi'}` +
+        (seed.profile ? ', có hồ sơ CV' : ''),
     );
   }
 

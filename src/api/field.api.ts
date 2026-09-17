@@ -19,8 +19,10 @@ import {
   isNarrowHcm,
   matchJob,
   type CompiledField,
+  type MatchKeyMode,
   type MatchResult,
 } from '@/lib/field-match';
+import { matchKeyOf } from '@/lib/cv-profile';
 import { classifyPurchase, type PurchaseTypeResult } from '@/lib/purchase-type';
 import { toMatchKey } from '@/crawler/normalize/text';
 
@@ -249,6 +251,8 @@ export interface FieldDefinition {
   provinces: readonly string[];
   levels: readonly string[];
   maxAgeDays: number | null;
+  /** Cách chuẩn hoá chữ của từ điển — xem `MatchKeyMode`. */
+  matchKey: MatchKeyMode;
   updatedAt: Date | null;
 }
 
@@ -267,6 +271,7 @@ export const getFieldDefinition = cache(async (slug: string): Promise<FieldDefin
     provinces: row.provinces,
     levels: row.levels,
     maxAgeDays: row.maxAgeDays,
+    matchKey: matchKeyOf(row.profile),
     updatedAt: row.updatedAt,
   };
 });
@@ -347,7 +352,10 @@ export async function scoreField(
     getProvinceNames(definition.provinces),
   ]);
 
-  const field = compileField({ keywords: definition.keywords, excludes: definition.excludes });
+  const field = compileField(
+    { keywords: definition.keywords, excludes: definition.excludes },
+    { matchKey: definition.matchKey },
+  );
 
   // ── Bước 1: vào ngành hay không ────────────────────────────────────────────
   const inField: FieldMatchedJob[] = [];
@@ -711,10 +719,10 @@ type ScopedJob = Pick<JobListItem, 'title' | 'descriptionText' | 'postedAt' | 'l
  * tin mà dùng một luật khác thì hai trang cãi nhau về cùng một tin.
  */
 export function fieldJudge(definition: FieldDefinition): (job: ScopedJob) => FieldVerdict {
-  const field: CompiledField = compileField({
-    keywords: definition.keywords,
-    excludes: definition.excludes,
-  });
+  const field: CompiledField = compileField(
+    { keywords: definition.keywords, excludes: definition.excludes },
+    { matchKey: definition.matchKey },
+  );
   const since = definition.maxAgeDays
     ? Date.now() - definition.maxAgeDays * 24 * 60 * 60 * 1000
     : null;
@@ -766,7 +774,10 @@ export interface DictionaryReport {
 
 export async function dictionaryReport(definition: FieldDefinition): Promise<DictionaryReport> {
   const candidates = await candidatesFor(definition);
-  const field = compileField({ keywords: definition.keywords, excludes: definition.excludes });
+  const field = compileField(
+    { keywords: definition.keywords, excludes: definition.excludes },
+    { matchKey: definition.matchKey },
+  );
 
   const strong = new Map(field.strong.map((term) => [term.label, 0]));
   const gray = new Map(field.gray.map((term) => [term.label, 0]));

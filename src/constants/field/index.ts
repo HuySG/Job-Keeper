@@ -1,4 +1,6 @@
+import { SOFTWARE_CV_PROFILE } from '@/constants/profile';
 import { DEFAULT_WORKSPACE, WORKSPACES, type WorkspaceId } from '@/constants/workspace';
+import type { CvProfile } from '@/lib/cv-profile';
 import { REMOTE_SLUG } from '@/crawler/normalize/location';
 
 /**
@@ -57,6 +59,11 @@ export interface FieldSeed {
   provinces: readonly string[];
   includeNoSalary: boolean;
   maxAgeDays: number | null;
+  /**
+   * Hồ sơ ứng viên để chấm "độ hợp CV" — `null` là ngành chỉ lọc bằng từ điển.
+   * Xem `lib/cv-profile.ts`.
+   */
+  profile: CvProfile | null;
   note: string;
 }
 
@@ -153,6 +160,7 @@ const PURCHASE_FIELDS: readonly FieldSeed[] = [
     // cơ hội chỉ vì sàn không bắt buộc ghi lương.
     includeNoSalary: true,
     maxAgeDays: 90,
+    profile: null,
 
     note:
       'Từ điển dựng 08/09/2026. Ba tầng nhiễu đã thấy bằng mắt trên dữ liệu ' +
@@ -164,11 +172,13 @@ const PURCHASE_FIELDS: readonly FieldSeed[] = [
 /**
  * Nghề lập trình, khớp CV .NET/React — docs/plan-swe.md §4.
  *
- * ⚠️ BẢN NHÁP (17/09/2026), chưa soi trên dữ liệu thật. Và còn một giới hạn
- *    biết trước: bộ chuẩn hoá hiện tại xoá `.`, `#`, `+`, nên ".NET" thành
- *    "net" và "C#" thành "c". Cho tới khi có `toTechKey` (việc C7) thì chỉ
- *    những từ viết được bằng chữ thường mới khớp — đó là lý do có
- *    `net develop`, `net core`, `asp net` bên cạnh `dotnet`/`csharp`.
+ * Dựng 17/09/2026, đã soi một lượt trên 292 tin thật (docs/plan-swe.md §15);
+ * chưa soi tay 30 tin (việc K1).
+ *
+ * So khớp bằng `toTechKey` (hồ sơ khai `matchKey: 'tech'`), nên ".NET" đọc
+ * thành "dotnet", "C#" thành "csharp". Vẫn giữ `net develop`, `net engineer`,
+ * `asp net`: VNW đã bỏ dấu chấm ngay trong tiêu đề ("NET Development
+ * Engineer"), và khi đó không còn gì để `toTechKey` nhận ra.
  */
 const SOFTWARE_FIELDS: readonly FieldSeed[] = [
   {
@@ -219,6 +229,11 @@ const SOFTWARE_FIELDS: readonly FieldSeed[] = [
 
     excludes: [
       // ── Kiểm thử ───────────────────────────────────────────────────────────
+      // "Test Developer C#", "SDET" — đo 17/09, lên mức Hợp chỉ vì có C#.
+      'test developer',
+      'test engineer',
+      'test automation',
+      'sdet',
       'tester',
       'qa',
       'qc',
@@ -247,6 +262,10 @@ const SOFTWARE_FIELDS: readonly FieldSeed[] = [
       // ── Hỗ trợ ─────────────────────────────────────────────────────────────
       'helpdesk',
       'it support',
+      // "Senior Systems Support Engineer C#/.Net" — vận hành, không viết sản phẩm.
+      'support engineer',
+      'application support',
+      'systems support',
       'hỗ trợ kỹ thuật',
       'kỹ thuật viên',
       // ── Đào tạo ────────────────────────────────────────────────────────────
@@ -268,8 +287,17 @@ const SOFTWARE_FIELDS: readonly FieldSeed[] = [
       'plc',
       'khuôn',
       'gia công',
-      // ── "Product Developer" của ngành may (CareerViet) ─────────────────────
+      'lập trình cam',
+      // ── "Developer" của ngành may và của bán hàng — đo 17/09 trên CareerViet,
+      //    VNW: "Pattern Developer", "Phát Triển Mẫu (Developer)",
+      //    "Technical Product Developer (Design Background) Bag",
+      //    "Business Developer For Wholesale Team" ─────────────────────────────
       'merchandiser',
+      'pattern developer',
+      'phát triển mẫu',
+      'product developer',
+      'business developer',
+      'business development',
     ],
 
     // TP.HCM (đã gộp Bình Dương, Bà Rịa – Vũng Tàu) + làm từ xa.
@@ -277,6 +305,8 @@ const SOFTWARE_FIELDS: readonly FieldSeed[] = [
     includeNoSalary: true,
     // Giữ như bên thu mua cho tới khi có số đo về vòng đời tin IT.
     maxAgeDays: 90,
+    // Khai `matchKey: 'tech'` — từ điển này phải đọc được ".NET", "C#".
+    profile: SOFTWARE_CV_PROFILE,
 
     note:
       'Bản nháp dựng 17/09/2026 từ CV (2 năm .NET/React/SQL, Thủ Đức). ' +

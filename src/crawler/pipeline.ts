@@ -17,6 +17,7 @@ import {
   SourceKind,
   StatusReason,
 } from '@/enums';
+import { compileSkills, extractSkills, type CompiledSkills } from '@/lib/skill-match';
 
 import { FailureStreak, shortError } from './failure-streak';
 import { HostAbortedError, PoliteFetcher } from './fetcher';
@@ -507,6 +508,7 @@ export async function upsertJob(
   if (!existing) {
     const created = await db.jobPosting.create({ data });
     await linkLocations(created.id, job);
+    await linkSkills(created.id, job);
     return 'created';
   }
 
@@ -530,6 +532,7 @@ export async function upsertJob(
 
   await db.jobPosting.update({ where: { id: existing.id }, data });
   await linkLocations(existing.id, job);
+  await linkSkills(existing.id, job);
   return 'updated';
 }
 
@@ -576,6 +579,66 @@ async function upsertCompany(job: NormalizedJob): Promise<{ id: number }> {
   });
 
   return company;
+}
+
+interface SkillCatalog {
+  compiled: CompiledSkills;
+  ids: ReadonlyMap<string, number>;
+}
+
+let skillCatalog: Promise<SkillCatalog> | null = null;
+
+/**
+ * Danh mục kỹ năng của CSDL đang chọn — nạp MỘT lần mỗi tiến trình.
+ *
+ * Một tiến trình script chỉ chạm một workspace (scripts/_env.ts), nên nhớ
+ * trong module là đủ. Nạp hỏng thì quên đi để lần sau thử lại, thay vì giữ
+ * mãi một promise đã hỏng.
+ */
+function loadSkillCatalog(): Promise<SkillCatalog> {
+  skillCatalog ??= db.skill
+    .findMany({ select: { id: true, slug: true, name: true, category: true, aliases: { select: { raw: true } } } })
+    .then((rows) => ({
+      compiled: compileSkills(
+        rows.map((r) => ({ slug: r.slug, name: r.name, category: r.category, aliases: r.aliases.map((a) => a.raw) })),
+      ),
+      ids: new Map(rows.map((r) => [r.slug, r.id])),
+    }))
+    .catch((err: unknown) => {
+      skillCatalog = null;
+      throw err;
+    });
+  return skillCatalog;
+}
+
+/**
+ * Ghi kỹ năng của một tin vào `JobSkill` (plan-swe §9.4) — thay toàn bộ, vì
+ * tin có thể bị sửa và kỹ năng cũ không còn đúng.
+ *
+ * Danh mục rỗng (workspace bae) thì trả về NGAY: không một truy vấn ghi nào,
+ * hành vi của CSDL thu mua không đổi.
+ *
+ * MỞ RA NGOÀI vì `scripts/reparse.ts` cần: tính lại từ blob thì kỹ năng cũng
+ * phải được tính lại, bằng đúng hàm lúc cào.
+ */
+export async function linkSkills(postingId: number, job: NormalizedJob): Promise<void> {
+  const catalog = await loadSkillCatalog();
+  if (catalog.compiled.size === 0) return;
+
+  const found = extractSkills(catalog.compiled, {
+    title: job.title,
+    description: job.descriptionText,
+    declared: job.skillTexts,
+  });
+  const data = [...found].flatMap(([slug, origin]) => {
+    const skillId = catalog.ids.get(slug);
+    return skillId === undefined ? [] : [{ postingId, skillId, origin }];
+  });
+
+  await db.$transaction([
+    db.jobSkill.deleteMany({ where: { postingId } }),
+    ...(data.length > 0 ? [db.jobSkill.createMany({ data })] : []),
+  ]);
 }
 
 async function linkLocations(postingId: number, job: NormalizedJob): Promise<void> {

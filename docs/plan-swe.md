@@ -3,8 +3,8 @@
 > Viết ngày **17/09/2026**. Tài liệu có ba phần: **nghiệp vụ** (§2–§5),
 > **kiến trúc** (§6–§10), **thi công** (§11–§15).
 >
-> **Cập nhật 17/09/2026:** đã chốt Q1, Q2, Q7 (§14), **xong chặng 1**, chặng 2
-> đã có CSDL swe + schema + số đo nguồn (§15).
+> **Cập nhật 17/09/2026:** đã chốt Q1, Q2, Q7 (§14); **xong chặng 1, 2, 3** —
+> CSDL swe có 563 tin, kỹ năng và độ hợp CV đã chấm (§15). Còn chặng 4–7.
 >
 > Không thay [plan.md](plan.md) (nhiệm vụ thu mua) hay [PLAN.md](../PLAN.md)
 > (kiến trúc tổng). Theo đúng quy ước của plan.md: số nào **đã kiểm** thì ghi
@@ -203,14 +203,25 @@ Giống nút "Kể cả tin khớp yếu" bên Bae: có công tắc "Kể cả t
 
 | Thành phần | Tối đa | Cách tính |
 |---|---|---|
-| Lõi stack | 50 | .NET/C# **25** · React **15** · SQL Server/PostgreSQL/Oracle **10**. Có ở tiêu đề hoặc trong kỹ năng nguồn khai → đủ điểm; chỉ có trong mô tả → nửa điểm |
+| Lõi stack | 55 | .NET/C# **35** · React **10** · SQL Server/PostgreSQL/Oracle/SQL **10**. Có ở tiêu đề hoặc trong kỹ năng nguồn khai → đủ điểm; chỉ có trong mô tả → nửa điểm |
 | Cộng thêm | 15 | mỗi kỹ năng nhóm "cộng thêm" **+3**, trần 15 |
-| Cấp bậc | 20 | `yearsExpMin` ≤ 2 → **20** · 3 → **14** · 4 → **6** · không ghi → **10** · FRESHER/INTERN → **5** (dưới tầm) · SENIOR mà chỉ đòi ≤ 3 năm → **12** |
-| Điều kiện làm việc | 15 | remote/hybrid **+5** · quận gần nhà (Thủ Đức, Bình Thạnh…) **+5** · miền ERP **+5** |
-| Trừ | — | frontend là Angular/Vue mà không có React **−8** · đòi giao tiếp tiếng Anh lưu loát **−5** |
+| Cấp bậc | 20 | `yearsExpMin` ≤ 2 → **20** · 3 → **14** · 4 → **6** · không ghi → **10** · FRESHER/INTERN → **5** (dưới tầm) · SENIOR → trần **12** |
+| Điều kiện làm việc | 15 | remote/hybrid **+5** · quận gần nhà (Thủ Đức, Bình Thạnh, Phú Nhuận, Dĩ An) **+5** · miền ERP **+5** |
+| Trừ | — | tiêu đề trộn stack khác (Java + React) **−10** · mô tả nhắc tiếng Nhật/Trung/Hàn **−10** · frontend là Angular/Vue mà không có React **−8** · đòi tiếng Anh tốt **−5** |
+
+> **Đổi so với bản đầu (17/09/2026):** .NET 25→**35**, React 15→**10**. CV
+> nặng backend .NET; với 25/15/10, tin "Back End Developer C#, .NET, SQL" cấp
+> Junior chỉ được 55 ("Hợp") dù là loại tin đúng nhất. Lý do đầy đủ ở
+> [constants/profile](../src/constants/profile/index.ts).
 
 Mức: **Rất hợp** ≥ 70 · **Hợp** 50–69 · **Với tới** 30–49 · **Lệch** < 30
-hoặc dính cờ cứng.
+hoặc dính cờ cứng. Hai luật thêm sau lượt soi đầu (§15):
+
+- **Stack loại trừ** — Unity, SAP, Salesforce, COBOL ở tiêu đề là cờ cứng
+  `other-stack` **kể cả khi có C#**: "Remote Unity Developer WebGL / C#" đã
+  lên mức Hợp chỉ nhờ chữ C#.
+- **INTERN/FRESHER tối đa "Với tới"**, dù điểm đủ cao: với CV 2 năm, việc thực
+  tập làm được nhưng là bước lùi.
 
 "Không ghi số năm" được 10/20 chứ không phải 0 — tin không nói không có nghĩa
 là không hợp, y như "Thoả thuận" không có nghĩa là 0 đồng.
@@ -240,7 +251,9 @@ Xét **theo thứ tự**, hẹp trước rộng sau (cùng quy tắc với
 | `dotnet-fullstack` | Fullstack .NET + React | có .NET **và** (React hoặc chữ "fullstack") |
 | `dotnet-backend` | Backend .NET | có .NET/C#, không có framework frontend |
 | `react-frontend` | Frontend React | có React, không có backend nào |
+| `mobile` | Mobile | Flutter, React Native, iOS, Android — không có React web |
 | `fullstack-khac` | Fullstack stack khác | fullstack với Node/Java/PHP… |
+| `frontend-khac` | Frontend khác | Angular/Vue, không có React |
 | `backend-khac` | Backend stack khác | |
 | `devops` | DevOps / hạ tầng | |
 | `chua-ro` | Chưa phân loại | |
@@ -898,11 +911,64 @@ Developer" (Eurofins) nằm ở CẢ vnw lẫn careerviet → cần khử trùng
 thuộc ngành từ 3 nguồn — còn topdev, glints, timviec365, vieclam24h chưa cào;
 phần "≥ 60 tin mức Hợp" chờ chặng 3.
 
+### Chặng 3 — kỹ năng và độ hợp CV · ✅ 17/09/2026
+
+| Việc | Kết quả |
+|---|---|
+| C7 | `toTechKey()` — ".NET"→`dotnet`, "C#"→`csharp`, "C++"→`cpp`, "React Native"→`reactnative`; ".net" sau chữ/số (tên miền) không đụng. 14 test trên tiêu đề thật |
+| C8 | `compileField(dict, { matchKey })`; từ điển chọn chế độ qua `SavedFilter.profile.matchKey` (`matchKeyOf`). Bae không có hồ sơ → `plain`, không đổi gì |
+| C9 | [constants/skill](../src/constants/skill/index.ts) — 66 kỹ năng, 151 bí danh, chỉ nạp cho swe · [lib/skill-match.ts](../src/lib/skill-match.ts) khớp hai đầu từ, hai tầng `declared`/`text` · `linkSkills` trong pipeline và `reparse` |
+| C10 | [lib/cv-profile.ts](../src/lib/cv-profile.ts) (zod) · [constants/profile](../src/constants/profile/index.ts) · [lib/cv-fit.ts](../src/lib/cv-fit.ts) (điểm, cờ, lời giải) · [lib/software-role.ts](../src/lib/software-role.ts) (9 loại việc) |
+| C11 | 69 test mới cho C7–C10 trên tiêu đề/kỹ năng thật; tổng **387** |
+| C12 | `match --ws swe` in phân bố mức hợp, cờ cứng, loại việc, khoảng trống kỹ năng; `--show great\|good\|stretch\|off\|unknown` in từng tin kèm lời giải |
+| D5 | `reparse --ws swe`: 563 tin · 0 lỗi → `JobSkill` có dữ liệu cho 192/198 tin thuộc ngành |
+
+**Đổi schema: `JobSkill.origin TEXT NOT NULL DEFAULT 'text'`** — theo quy
+trình `migrate-db`: bảng rỗng ở cả hai CSDL (đo trước), SQL sinh ra đúng một
+câu, áp swe trước rồi bae bằng `db execute`, cả hai hết lệch. Mặc định là
+`text` (bằng chứng YẾU) — không biết nguồn gốc thì không được tính là chắc.
+
+**Bae không đổi:** gọi `linkSkills` thẳng trên một tin của CSDL bae → `Skill`
+0, `JobSkill` 0 trước và sau.
+
+**Hiệu chỉnh lượt đầu** — soi từng mức trên dữ liệu thật:
+
+| Thấy | Sửa |
+|---|---|
+| "Remote Unity Developer WebGL / C#" ở mức Hợp | Unity, SAP, Salesforce, COBOL là stack loại trừ → cờ cứng |
+| "Test Developer C#", "Senior Systems Support Engineer C#/.Net" ở mức Hợp | từ loại `test developer`, `test engineer`, `sdet`, `support engineer`, `application support`… |
+| "Intern .NET Developer" ở mức Hợp | INTERN/FRESHER tối đa "Với tới" |
+| "Lập trình CAM", "Pattern Developer", "Phát Triển Mẫu", "Business Developer" ở nhóm "không đủ dữ liệu" | thêm từ loại |
+| Nhiều tin "gần nhà (Phú Nhuận)" — nghi sai | **đúng thật**: Topicus, HQSOFT, DP đều ở Phú Nhuận (kiểm `JobLocation.rawText`) |
+
+| Mức (198 tin thuộc ngành) | Lượt đầu | Sau hiệu chỉnh |
+|---|---|---|
+| Rất hợp | 9 | **9** |
+| Hợp | 27 | **23** |
+| Với tới | 33 | 32 |
+| Lệch | 128 | 129 |
+| Không đủ dữ liệu | 13 | 5 |
+
+Cờ cứng: `other-stack` 69 · `too-senior` 35 · `lang-required` 2.
+Loại việc: Backend stack khác 63 · Fullstack stack khác 45 · **Backend .NET 35**
+· Chưa phân loại 19 · **Fullstack .NET 14** · Mobile 12 · Frontend React 7.
+**Khoảng trống kỹ năng** trong 32 tin Hợp trở lên: Azure 11 · AWS 7 · Kafka 4
+· Next.js 4 · MySQL 4 · Redis 3 · MongoDB 3 · Kubernetes 3.
+
+Chín tin "Rất hợp": Fullstack .NET/React (TMA), 02 .NET Developer (DP),
+Full-stack Developer (Simpson Strong-Tie), AI-Augmented Software Engineer .NET
+(HQSOFT), Middle Backend .NET Core/SQL (Phòng khám 315), ERP Developer,
+Back End Developer C#/.NET/SQL (LG CNS), Kỹ Sư Phát Triển Ứng Dụng (Truetech),
+Software Developer PL/SQL/React (Hansen).
+
+**N1 chưa đạt:** 32/60 tin Hợp trở lên, từ 3 nguồn. Muốn đạt phải cào thêm
+nguồn và chờ tin mới, không phải nới luật chấm.
+
 ### Việc tiếp theo
 
 | # | Việc | Ai |
 |---|---|---|
-| C7–C12 | Kỹ năng + độ hợp CV (chặng 3) — `toTechKey` sẽ thay các từ tạm `net develop`/`net engineer`/`asp net` | tôi |
+| C13–C18 | Chặng 4 — web nhiều workspace (`/bae/...`, `/swe/...`) | tôi |
 | — | Cào nốt topdev, glints, vieclam24h (timviec365 chậm, để sau) | tôi |
 | — | `recheck --ws swe` cho 167 tin chưa kiểm còn-sống | tôi, hoặc để lịch CI ở chặng 6 |
 | — | Khai Variable `USD_VND_RATE` trên GitHub | **anh** — Settings → Secrets and variables → Actions → Variables |

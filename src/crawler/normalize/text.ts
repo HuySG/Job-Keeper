@@ -34,6 +34,50 @@ export function toMatchKey(input: string): string {
     .trim();
 }
 
+/**
+ * Tên công nghệ mà `toMatchKey` sẽ phá: dấu chấm, `#`, `+` mang nghĩa.
+ * Thay TRƯỚC khi bỏ ký tự. Thứ tự có nghĩa: dạng dài trước dạng ngắn.
+ */
+const TECH_REPLACEMENTS: readonly [RegExp, string][] = [
+  // "ASP.NET", "VB.NET", "ADO.NET" — vẫn là .NET, giữ cả tên riêng.
+  [/\b(asp|vb|ado)\.net\b/gi, ' $1net dotnet '],
+  // ".NET" đứng sau ký tự KHÔNG phải chữ/số: "Sr .NET", "C#/.Net", "(.NET".
+  // Sau chữ/số thì là tên miền ("example.net") — không đụng.
+  [/(^|[^a-z0-9])\.net\b/gi, '$1 dotnet '],
+  [/\bc#/gi, ' csharp '],
+  [/\bf#/gi, ' fsharp '],
+  [/\bc\+\+/gi, ' cpp '],
+  // React Native là mobile, KHÔNG phải React web — gộp thành một từ để kỹ năng
+  // "react" (khớp hai đầu) không bắt nhầm.
+  [/\breact[\s-]*native\b/gi, ' reactnative '],
+  [/\breact\.?js\b/gi, ' reactjs react '],
+  [/\bnode\.?js\b/gi, ' nodejs '],
+  [/\bnext\.?js\b/gi, ' nextjs '],
+  [/\bnest\.?js\b/gi, ' nestjs '],
+  [/\bvue\.?js\b/gi, ' vuejs vue '],
+  [/\bthree\.?js\b/gi, ' threejs '],
+  [/\bci\s*\/\s*cd\b/gi, ' cicd '],
+];
+
+/**
+ * Khoá so khớp cho nghề LẬP TRÌNH — như `toMatchKey`, nhưng giữ nghĩa của tên
+ * công nghệ: ".NET" → "dotnet", "C#" → "csharp", "C++" → "cpp".
+ *
+ * `toMatchKey` xoá mọi ký tự không phải chữ/số, nên ".NET Developer" thành
+ * "net developer" (và `\bnet` khớp cả "network"), còn "C# Developer" thành
+ * "c developer". Cùng họ với bài học "dược/được": khoá đã bỏ ký tự thì mất
+ * nghĩa. Chuỗi không có tên công nghệ nào thì ra y hệt `toMatchKey` — từ điển
+ * thu mua dùng hàm nào cũng vậy, nhưng vẫn giữ `toMatchKey` để khỏi phải chứng
+ * minh điều đó mỗi lần. Xem docs/plan-swe.md §4.3.
+ */
+export function toTechKey(input: string): string {
+  let text = input;
+  for (const [pattern, replacement] of TECH_REPLACEMENTS) {
+    text = text.replace(pattern, replacement);
+  }
+  return toMatchKey(text);
+}
+
 /** Slug dùng cho URL và cho cột slug trong DB. */
 export function toSlug(input: string): string {
   return toMatchKey(input).replace(/\s+/g, '-').slice(0, 120) || 'khong-ten';

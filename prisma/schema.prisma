@@ -292,6 +292,11 @@ model SkillAlias {
 model JobSkill {
   postingId Int
   skillId   Int
+  /// "declared" = nguồn tự khai (JSON-LD `skills`, VNW `skillName`) — tin cậy.
+  /// "text"     = chỉ thấy khi quét tiêu đề/mô tả — dự phòng, chấm nửa điểm.
+  /// Mặc định là thứ YẾU hơn: không biết nguồn gốc thì không được tính là chắc.
+  /// Xem src/lib/skill-match.ts và docs/plan-swe.md §5.3.
+  origin    String     @default("text")
   posting   JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
   skill     Skill      @relation(fields: [skillId], references: [id])
 

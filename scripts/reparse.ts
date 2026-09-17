@@ -2,6 +2,7 @@ import { db } from '@/api/db';
 import { CrawlTrigger, ParseStatus, RunStatus } from '@/enums';
 import { validateJobPosting } from '@/crawler/jsonld';
 import { normalizeJobPosting } from '@/crawler/normalize';
+import { linkSkills } from '@/crawler/pipeline';
 import { vnwRecordToJsonLd } from '@/crawler/sources/vietnamworks';
 import { createBlobStore } from '@/crawler/storage/blob';
 
@@ -131,6 +132,9 @@ async function main(): Promise<void> {
           // không nói gì về việc tin còn sống hay đã chết.
         },
       });
+      // Kỹ năng cũng là dữ liệu phái sinh từ blob — tính lại bằng đúng hàm lúc
+      // cào. Workspace không có danh mục kỹ năng thì hàm này không làm gì.
+      await linkSkills(posting.id, job);
       stats.updated += 1;
     } catch (err) {
       stats.failed += 1;

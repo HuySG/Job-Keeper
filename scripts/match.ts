@@ -1,6 +1,8 @@
 import { db } from '@/api/db';
 import { WORKSPACES } from '@/constants/workspace';
 import { JobStatus } from '@/enums';
+import { FIT_BAND_LABELS, explainFit, scoreFit, type FitBand, type FitResult } from '@/lib/cv-fit';
+import { parseCvProfile } from '@/lib/cv-profile';
 import {
   compileField,
   isNarrowHcm,
@@ -9,6 +11,9 @@ import {
   type Verdict,
 } from '@/lib/field-match';
 
+import { compileSkills, type SkillOrigin } from '@/lib/skill-match';
+import { classifySoftwareRole } from '@/lib/software-role';
+
 import { loadEnv, parseArgs } from './_env';
 
 /**
@@ -16,6 +21,7 @@ import { loadEnv, parseArgs } from './_env';
  *
  *   npm run match                                  ngành mặc định, 20 dòng mỗi loại
  *   npm run match -- --ws swe                      ngành mặc định của workspace swe
+ *   npm run match -- --ws swe --show good          tin mức "Hợp" theo độ hợp CV
  *   npm run match -- --filter thu-mua-hcm
  *   npm run match -- --show reject                 xem tin bị loại, để dò loại oan
  *   npm run match -- --show weak --sample 40
@@ -34,7 +40,7 @@ async function main(): Promise<void> {
   // `thu-mua-hcm` thì chỉ ra "không có ngành" trong CSDL phần mềm.
   const slug = args.string('filter') ?? WORKSPACES[ws].defaultField;
   const sample = args.number('sample') ?? 20;
-  const show = (args.string('show') ?? 'strong') as Verdict | 'all';
+  const show = (args.string('show') ?? 'strong') as Verdict | FitBand | 'all';
   const strictHcm = args.boolean('strict-hcm');
   const allProvinces = args.boolean('all-provinces');
   const includeDead = args.boolean('include-dead');
@@ -46,7 +52,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  const field = compileField({ keywords: filter.keywords, excludes: filter.excludes });
+  const parsedProfile = parseCvProfile(filter.profile);
+  if (!parsedProfile.ok) {
+    console.error(parsedProfile.error);
+    process.exitCode = 1;
+    return;
+  }
+  const profile = parsedProfile.profile;
+
+  const field = compileField(
+    { keywords: filter.keywords, excludes: filter.excludes },
+    { matchKey: profile?.matchKey ?? 'plain' },
+  );
 
   const provinces = allProvinces ? [] : filter.provinces;
   const since = filter.maxAgeDays
@@ -71,6 +88,11 @@ async function main(): Promise<void> {
       postedAt: true,
       expiresAt: true,
       lastCheckedAt: true,
+      level: true,
+      yearsExpMin: true,
+      workMode: true,
+      district: true,
+      skills: { select: { origin: true, skill: { select: { slug: true } } } },
       company: { select: { name: true } },
       source: { select: { code: true } },
       locations: { select: { rawText: true } },
@@ -126,7 +148,79 @@ async function main(): Promise<void> {
   }
   console.log(`└─ thuộc ngành: ${inField}/${scored} (${pct(inField, scored)})\n`);
 
-  const wanted: Verdict[] = show === 'all' ? ['strong', 'weak', 'reject'] : [show];
+  // ── Độ hợp CV — chỉ khi ngành có hồ sơ ────────────────────────────────────
+  if (profile) {
+    const skillRows = await db.skill.findMany({
+      select: { slug: true, name: true, category: true, aliases: { select: { raw: true } } },
+    });
+    const catalog = compileSkills(
+      skillRows.map((r) => ({ ...r, aliases: r.aliases.map((a) => a.raw) })),
+    );
+    if (catalog.size === 0) {
+      console.log('⚠ Chưa có danh mục kỹ năng — chạy db:seed cho workspace này.\n');
+    }
+
+    const fitRows: { posting: (typeof postings)[number]; fit: FitResult; role: string }[] = [];
+    for (const { posting } of buckets.strong.concat(buckets.weak)) {
+      const job = {
+        title: posting.title,
+        level: posting.level,
+        yearsExpMin: posting.yearsExpMin,
+        workMode: posting.workMode,
+        district: posting.district,
+        skills: new Map(posting.skills.map((js) => [js.skill.slug, js.origin as SkillOrigin])),
+      };
+      fitRows.push({
+        posting,
+        fit: scoreFit(profile, catalog, job),
+        role: classifySoftwareRole(catalog, job).label,
+      });
+    }
+    fitRows.sort((a, b) => b.fit.score - a.fit.score);
+
+    const withSkills = fitRows.filter((r) => r.posting.skills.length > 0).length;
+    console.log(`┌─ Độ hợp CV — ${fitRows.length} tin thuộc ngành (${withSkills} có kỹ năng đã bóc)`);
+    for (const band of BANDS) {
+      const n = fitRows.filter((r) => r.fit.band === band).length;
+      console.log(`│  ${FIT_BAND_LABELS[band].padEnd(18)} ${String(n).padStart(5)}`);
+    }
+    const flagCounts = new Map<string, number>();
+    for (const r of fitRows) for (const f of r.fit.flags) flagCounts.set(f, (flagCounts.get(f) ?? 0) + 1);
+    console.log(`│  cờ cứng: ${[...flagCounts].map(([f, n]) => `${f} ${n}`).join(' · ') || '—'}`);
+    console.log('└─');
+
+    const roles = new Map<string, number>();
+    for (const r of fitRows) roles.set(r.role, (roles.get(r.role) ?? 0) + 1);
+    console.log(`   loại việc: ${[...roles].sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l} ${n}`).join(' · ')}`);
+
+    const gaps = new Map<string, number>();
+    for (const r of fitRows) {
+      if (r.fit.band !== 'great' && r.fit.band !== 'good') continue;
+      for (const g of r.fit.missing) gaps.set(g, (gaps.get(g) ?? 0) + 1);
+    }
+    if (gaps.size > 0) {
+      const good = fitRows.filter((r) => r.fit.band === 'great' || r.fit.band === 'good').length;
+      console.log(
+        `   khoảng trống kỹ năng (trong ${good} tin Hợp trở lên): ` +
+          [...gaps].sort((a, b) => b[1] - a[1]).map(([g, n]) => `${catalog.info.get(g)?.name ?? g} ${n}`).join(' · '),
+      );
+    }
+    console.log('');
+
+    if ((BANDS as readonly string[]).includes(show)) {
+      const rows = fitRows.filter((r) => r.fit.band === show);
+      console.log(`── ${FIT_BAND_LABELS[show as FitBand]} — ${rows.length} tin, hiện ${Math.min(sample, rows.length)}`);
+      for (const { posting, fit, role } of rows.slice(0, sample)) {
+        console.log(`  ${trim(posting.title, 52).padEnd(52)} ${String(posting.level ?? '?').padEnd(8)} ${posting.source.code}`);
+        console.log(`    ${trim(posting.company.name, 30).padEnd(30)} [${role}] ${explainFit(fit, catalog)}`);
+      }
+      console.log('');
+      return;
+    }
+  }
+
+  const wanted: Verdict[] =
+    show === 'all' ? ['strong', 'weak', 'reject'] : (['strong', 'weak', 'reject'] as const).filter((v) => v === show);
   for (const verdict of wanted) {
     const rows = buckets[verdict];
     if (!rows) continue;
@@ -162,10 +256,12 @@ async function main(): Promise<void> {
   if (stale > 0) {
     console.log(
       `⚠ ${stale}/${inField} tin thuộc ngành CHƯA từng được kiểm còn-sống bằng HTTP.\n` +
-        `  Chạy: npm run recheck -- --filter ${slug}`,
+        `  Chạy: npm run recheck --${ws === 'bae' ? '' : ` --ws ${ws}`} --filter ${slug}`,
     );
   }
 }
+
+const BANDS: readonly FitBand[] = ['great', 'good', 'stretch', 'off', 'unknown'];
 
 const LABEL: Record<Verdict, string> = {
   strong: 'NHẬN CHẮC',

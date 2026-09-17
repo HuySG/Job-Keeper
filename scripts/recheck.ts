@@ -13,6 +13,7 @@ import { extractJobPostings } from '@/crawler/jsonld';
 import { applyFetchQuirks } from '@/crawler/sources/registry';
 import { SAVED_RECHECK_HOURS } from '@/constants/saved';
 import { CrawlTrigger, JobStatus, RunStatus, StatusReason } from '@/enums';
+import { matchKeyOf } from '@/lib/cv-profile';
 import { compileField, matchJob } from '@/lib/field-match';
 
 import { loadEnv, parseArgs } from './_env';
@@ -181,7 +182,10 @@ async function main(): Promise<void> {
   });
 
   const field = filter
-    ? compileField({ keywords: filter.keywords, excludes: filter.excludes })
+    ? compileField(
+        { keywords: filter.keywords, excludes: filter.excludes },
+        { matchKey: matchKeyOf(filter.profile) },
+      )
     : null;
 
   // ── Tin đã lưu đi TRƯỚC ────────────────────────────────────────────────────
