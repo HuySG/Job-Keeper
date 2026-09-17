@@ -67,8 +67,21 @@ const PERIOD_TO_MONTH: Record<SalaryPeriod, number> = {
   YEAR: 1 / 12,
 };
 
+/** Tỷ giá dự phòng khi `USD_VND_RATE` vắng mặt hoặc không đọc được. */
+const FALLBACK_USD_VND = 25_400;
+
+/**
+ * Tỷ giá USD→VND, và ngày áp dụng.
+ *
+ * Chỉ nhận số DƯƠNG hữu hạn. Từng viết `Number(env ?? 25_400)` — và GitHub
+ * Actions truyền Variable chưa khai thành CHUỖI RỖNG, `??` không bắt chuỗi
+ * rỗng, `Number('')` là 0. Đo 17/09/2026: 172 tin USD cào trên CI mang
+ * `fxRate = 0` và lương 0 đồng, lọt thẳng vào trung vị. Tỷ giá dự phòng được
+ * ghi vào `fxRate` của từng tin, nên dùng nó vẫn truy vết được.
+ */
 function getFxRate(): { rate: number; date: Date } {
-  const rate = Number(process.env.USD_VND_RATE ?? 25_400);
+  const parsed = Number(process.env.USD_VND_RATE?.trim() || Number.NaN);
+  const rate = Number.isFinite(parsed) && parsed > 0 ? parsed : FALLBACK_USD_VND;
   const raw = process.env.USD_VND_RATE_DATE;
   const date = raw ? new Date(raw) : new Date();
   return { rate, date: Number.isNaN(date.getTime()) ? new Date() : date };
@@ -113,25 +126,48 @@ export function parseNumber(input: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** Hệ số của đơn vị đứng sau số: "20 triệu" -> 20 × 1e6. */
+/**
+ * Hệ số của đơn vị đứng sau số: "20 triệu" -> 20 × 1e6.
+ *
+ * "M", "mil", "million" là cách sàn IT viết triệu (đo 17/09/2026 trên ITviec:
+ * "18 - 20M", "Up to 35mil").
+ */
 function unitMultiplier(text: string): number {
   if (/\bt(y|ỷ)\b|\bty\b/.test(text)) return 1e9;
-  if (/\btr(i(e|ệ)u)?\b|\btrd?\b|\bcu\b/.test(text)) return 1e6;
+  if (/\btr(i(e|ệ)u)?\b|\btrd?\b|\bcu\b|\bm(il(lions?)?)?\b/.test(text)) return 1e6;
   if (/\bng(h)?[ai]n\b|\bk\b/.test(text)) return 1e3;
   return 1;
 }
 
-function detectCurrency(text: string): Currency {
+/**
+ * Tiền tệ theo CHÍNH chuỗi lương; chuỗi không nói gì thì dùng `fallback`.
+ *
+ * Dấu hiệu VND phải đứng sau một chữ số ("50,000,000đ", "20 dong"): "đồng"
+ * trần thì trùng "hợp đồng". Chuỗi đã bỏ dấu nên "đ" ở đây là "d".
+ *
+ * Đơn vị TRIỆU cũng là dấu hiệu VND: không ai ghi lương tháng hàng triệu đô,
+ * nên "18 - 20M" dưới lời khai `currency: "USD"` vẫn là tiền đồng.
+ */
+function detectCurrency(text: string, fallback: Currency): Currency {
   if (/\$|\busd\b|\bdola?r?\b|\bdo la\b/.test(text)) return Currency.USD;
-  return Currency.VND;
+  if (/\bvnd\b|\btrieu\b|\d\s*(?:d|dong|trieu|trd|tr|m|mil|millions?)\b/.test(text)) {
+    return Currency.VND;
+  }
+  return fallback;
 }
 
-function detectPeriod(text: string): SalaryPeriod {
+function detectPeriod(text: string, fallback: SalaryPeriod): SalaryPeriod {
   if (/\/\s*(h|gio|hour)\b|\bmoi gio\b|\bper hour\b/.test(text)) return SalaryPeriod.HOUR;
   if (/\/\s*(ngay|day)\b|\bmoi ngay\b|\bper day\b/.test(text)) return SalaryPeriod.DAY;
   if (/\/\s*(tuan|week)\b|\bper week\b/.test(text)) return SalaryPeriod.WEEK;
   if (/\/\s*(nam|year|yr)\b|\bmoi nam\b|\bper year\b|\bannual/.test(text)) return SalaryPeriod.YEAR;
-  return SalaryPeriod.MONTH;
+  return fallback;
+}
+
+/** Điều chuỗi lương không tự nói thì lấy từ đâu — mặc định VND/tháng. */
+interface SalaryTextDefaults {
+  currency?: Currency;
+  period?: SalaryPeriod;
 }
 
 /**
@@ -140,7 +176,10 @@ function detectPeriod(text: string): SalaryPeriod {
  * Bắt được: "15 - 20 triệu", "Upto 60tr", "$2000-3000", "Trên 30 triệu",
  * "Tới 25 triệu", "20,000,000 - 30,000,000 VNĐ", "8-10 tr", "Thoả thuận".
  */
-export function parseSalaryText(raw: string | null | undefined): NormalizedSalary {
+export function parseSalaryText(
+  raw: string | null | undefined,
+  defaults: SalaryTextDefaults = {},
+): NormalizedSalary {
   if (!raw) return { ...NOT_PUBLIC, raw: null };
 
   const original = normalizeWhitespace(raw);
@@ -150,11 +189,14 @@ export function parseSalaryText(raw: string | null | undefined): NormalizedSalar
     return { ...NOT_PUBLIC, raw: original };
   }
 
-  const currency = detectCurrency(text);
-  const period = detectPeriod(text);
+  const currency = detectCurrency(text, defaults.currency ?? Currency.VND);
+  const period = detectPeriod(text, defaults.period ?? SalaryPeriod.MONTH);
 
   // Nhặt mọi cụm số kèm đơn vị đứng ngay sau nó, theo đúng thứ tự xuất hiện.
-  const tokenRe = /([\d][\d.,]*)\s*(ty|trieu|trd|tr|k|ngan|nghin|cu)?/g;
+  // Đơn vị không được dính liền chữ cái phía sau: "20 months" không phải
+  // 20 triệu, "15kg" không phải 15 nghìn. Đơn vị dài đứng trước đơn vị ngắn.
+  const tokenRe =
+    /([\d][\d.,]*)\s*(?:(millions?|mil|trieu|trd|tr|ty|ngan|nghin|cu|k|m)(?![a-z]))?/g;
   const tokens: { value: number; multiplier: number }[] = [];
   let match: RegExpExecArray | null;
 
@@ -226,30 +268,47 @@ export function parseSalaryJsonLd(baseSalary: unknown): NormalizedSalary | null 
       : Currency.VND;
 
   const value = amount['value'];
-  let min: number | null = null;
-  let max: number | null = null;
-  let period: SalaryPeriod = SalaryPeriod.MONTH;
+  const raw = JSON.stringify(baseSalary).slice(0, 300);
 
   if (value != null && typeof value === 'object') {
     const qv = value as Record<string, unknown>;
-    min = toNumber(qv['minValue']);
-    max = toNumber(qv['maxValue']);
-    // Không có min/max nhưng có value: một con số duy nhất, coi là cả sàn lẫn trần.
-    if (min === null && max === null) {
-      const single = toNumber(qv['value']);
-      min = single;
-      max = single;
-    }
-    period = toPeriod(qv['unitText']);
-  } else if (typeof value === 'number' || typeof value === 'string') {
-    const single = toNumber(value);
-    min = single;
-    max = single;
-    period = toPeriod(amount['unitText']);
+    const period = toPeriod(qv['unitText']);
+    const min = toNumber(qv['minValue']);
+    const max = toNumber(qv['maxValue']);
+    if (min !== null || max !== null) return finalize({ min, max, currency, period, raw });
+    // Không có min/max: `value` là một con số, hoặc một CHUỖI mà sàn tự viết.
+    return fromSingleValue(qv['value'], currency, period, raw);
   }
+  return fromSingleValue(value, currency, toPeriod(amount['unitText']), raw);
+}
 
-  if (min === null && max === null) return null;
-  return finalize({ min, max, currency, period, raw: JSON.stringify(baseSalary).slice(0, 300) });
+/**
+ * `value` đơn lẻ của JSON-LD.
+ *
+ * Số → vừa là sàn vừa là trần. CHUỖI → đọc như lương viết tay, vì sàn nhét vào
+ * đó đúng thứ họ hiển thị: đo 17/09/2026, ITviec tin 5224 ghi
+ * `"30,000,000 - 50,000,000đ"`. Đọc chuỗi đó như MỘT số thì hai vế dính liền
+ * thành 3.000.000.050.000.000; và vì sàn khai `currency: "USD"` cho chính chuỗi
+ * có chữ "đ", nên tiền tệ ghi trong chuỗi phải thắng lời khai — lời khai chỉ
+ * dùng khi chuỗi không nói gì.
+ */
+function fromSingleValue(
+  value: unknown,
+  currency: Currency,
+  period: SalaryPeriod,
+  raw: string,
+): NormalizedSalary | null {
+  if (typeof value === 'number') {
+    const single = toNumber(value);
+    return single === null ? null : finalize({ min: single, max: single, currency, period, raw });
+  }
+  if (typeof value === 'string') {
+    const parsed = parseSalaryText(value, { currency, period });
+    // "Negotiable" nằm trong value (TopDev): trả null để rơi về đường văn bản
+    // của adapter, đúng như trước.
+    return parsed.isPublic ? { ...parsed, raw } : null;
+  }
+  return null;
 }
 
 function toNumber(value: unknown): number | null {

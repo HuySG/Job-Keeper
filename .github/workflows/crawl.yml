@@ -55,7 +55,13 @@ jobs:
       # âm thầm dùng mức dự phòng cài cứng 25.400 trong salary.ts, còn máy ở
       # nhà dùng mức trong .env. Cùng một tin ITviec khai lương USD sẽ ra hai
       # con số VND khác nhau tuỳ chỗ chạy — sai lệch im lặng, không ai thấy.
-      # Chưa khai Variable thì vẫn rơi về mức dự phòng như cũ, không hỏng gì.
+      #
+      # ⚠️ Variable CHƯA khai thì GitHub truyền CHUỖI RỖNG, không phải "không
+      #    có biến". Câu cũ ở đây ("rơi về mức dự phòng, không hỏng gì") SAI:
+      #    salary.ts khi ấy đọc `Number('' ?? 25_400)` = 0, và đo 17/09/2026
+      #    có 172 tin USD cào trên runner mang tỷ giá 0, lương 0 đồng, lọt vào
+      #    trung vị. salary.ts nay chỉ nhận số dương, còn lại mới dùng 25.400 —
+      #    nhưng vẫn NÊN khai Variable để tỷ giá không phải con số cài cứng.
       USD_VND_RATE: ${{ vars.USD_VND_RATE }}
       USD_VND_RATE_DATE: ${{ vars.USD_VND_RATE_DATE }}
       # ⚠️ Ổ đĩa của runner bị xoá sau mỗi lượt, nên KHÔNG dùng driver "fs" ở

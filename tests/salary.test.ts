@@ -55,6 +55,19 @@ describe('parseSalaryText', () => {
     expect(s.max).toBe(10 * TR);
   });
 
+  it('"M" / "mil" / "million" là triệu — cách ghi của sàn IT', () => {
+    expect(parseSalaryText('15 - 20M')).toMatchObject({ min: 15 * TR, max: 20 * TR, currency: 'VND' });
+    expect(parseSalaryText('Up to 35mil')).toMatchObject({ min: null, max: 35 * TR });
+    expect(parseSalaryText('25 million VND')).toMatchObject({ min: 25 * TR, max: 25 * TR });
+  });
+
+  it('chữ "m" đầu một từ khác không phải đơn vị triệu', () => {
+    // "20 months" không được thành 20 triệu.
+    const s = parseSalaryText('20 months');
+    expect(s.min).toBe(20);
+    expect(s.outOfRange).toBe(true);
+  });
+
   it('"Upto" chỉ cho trần, không có sàn', () => {
     const s = parseSalaryText('Upto 60tr');
     expect(s.min).toBeNull();
@@ -164,5 +177,107 @@ describe('parseSalaryJsonLd trên dữ liệu THẬT', () => {
     });
     expect(s?.period).toBe('HOUR');
     expect(s?.min).toBe(50_000 * 176);
+  });
+
+  // ITviec, tin 5224, cào 17/09/2026 — nguyên văn `baseSalary`. Hai bẫy chồng
+  // lên nhau: `value` là CHUỖI KHOẢNG (không có minValue/maxValue), và sàn khai
+  // `currency: "USD"` cho một chuỗi ghi rõ "đ". Trước khi sửa: hai số dính liền
+  // thành 3.000.000.050.000.000, nhân tỷ giá USD ra 7,62e19 — tràn cột Int và
+  // làm DỪNG cả lượt cào ITviec.
+  const ITVIEC_5224 = {
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: {
+      '@type': 'QuantitativeValue',
+      unitText: 'MONTH',
+      value: '30,000,000 - 50,000,000đ\t',
+    },
+  };
+
+  it('ITviec 5224: chuỗi KHOẢNG trong value được đọc thành khoảng', () => {
+    const s = parseSalaryJsonLd(ITVIEC_5224);
+    expect(s?.min).toBe(30 * TR);
+    expect(s?.max).toBe(50 * TR);
+    expect(s?.outOfRange).toBe(false);
+  });
+
+  it('ITviec 5224: chuỗi ghi "đ" thắng lời khai currency USD của sàn', () => {
+    const s = parseSalaryJsonLd(ITVIEC_5224);
+    expect(s?.currency).toBe('VND');
+    expect(s?.fxRate).toBeNull();
+  });
+
+  // Ba chuỗi THẬT khác của ITviec (tin 3903, 5745, 3443 — cào 17/09/2026),
+  // cùng khai `currency: "USD"`. So code cũ với mới trên 2.926 blob thì chỉ bốn
+  // tin này đổi kết quả, và cả bốn đều là ITviec.
+  const itviecValue = (value: string) => ({
+    '@type': 'MonetaryAmount',
+    currency: 'USD',
+    value: { '@type': 'QuantitativeValue', unitText: 'MONTH', value },
+  });
+
+  it('ITviec 3903: "18 - 20M" là 18–20 triệu ĐỒNG, dù sàn khai USD', () => {
+    const s = parseSalaryJsonLd(itviecValue('18 - 20M'));
+    expect(s?.currency).toBe('VND');
+    expect(s?.min).toBe(18 * TR);
+    expect(s?.max).toBe(20 * TR);
+  });
+
+  it('ITviec 5745: "Up to 35mil" là tối đa 35 triệu đồng', () => {
+    const s = parseSalaryJsonLd(itviecValue('Up to 35mil'));
+    expect(s?.currency).toBe('VND');
+    expect(s?.min).toBeNull();
+    expect(s?.max).toBe(35 * TR);
+  });
+
+  it('ITviec 3443: "Upto $1100 gross/tháng" là TRẦN 1.100 USD, không phải cả sàn lẫn trần', () => {
+    const s = parseSalaryJsonLd(itviecValue('Upto $1100 gross/tháng'));
+    expect(s?.currency).toBe('USD');
+    expect(s?.min).toBeNull();
+    expect(s?.max).toBe(1100 * 25_000);
+  });
+
+  it('chuỗi KHÔNG nói tiền tệ thì tin lời khai currency của JSON-LD', () => {
+    // Ca biên tự dựng — chưa gặp thật, nhưng là điều ngược lại của ca trên.
+    const s = parseSalaryJsonLd({
+      currency: 'USD',
+      value: { unitText: 'MONTH', value: '800 - 2,000' },
+    });
+    expect(s?.currency).toBe('USD');
+    expect(s?.min).toBe(800 * 25_000);
+    expect(s?.max).toBe(2000 * 25_000);
+  });
+
+  it('timviec365: value là chuỗi một số — giữ nguyên kết quả cũ', () => {
+    // Dạng của 69 tin timviec365 + 4 tin CareerViet trong CSDL bae (đo 17/09).
+    const s = parseSalaryJsonLd({
+      '@type': 'MonetaryAmount',
+      currency: 'VND',
+      value: { '@type': 'QuantitativeValue', unitText: 'MONTH', value: '20000000' },
+    });
+    expect(s?.min).toBe(20 * TR);
+    expect(s?.max).toBe(20 * TR);
+    expect(s?.currency).toBe('VND');
+  });
+});
+
+describe('tỷ giá — biến môi trường RỖNG không được thành 0', () => {
+  // Đo 17/09/2026 trong CSDL bae: 172 tin USD có fxRate = 0 và lương = 0, cả
+  // 172 đều cào trên GitHub Actions. Workflow truyền `${{ vars.USD_VND_RATE }}`,
+  // mà Variable chưa khai thì GitHub đưa vào CHUỖI RỖNG — và
+  // `Number('' ?? 25_400)` là 0, vì `??` chỉ bắt null/undefined.
+  const USD_800 = { currency: 'USD', value: { minValue: 800, maxValue: 800, unitText: 'MONTH' } };
+
+  it.each(['', '   ', 'abc', '0', '-5'])('USD_VND_RATE=%j → dùng mức dự phòng, không bao giờ 0', (raw) => {
+    const saved = process.env.USD_VND_RATE;
+    process.env.USD_VND_RATE = raw;
+    try {
+      const s = parseSalaryJsonLd(USD_800);
+      expect(s?.fxRate).toBe(25_400);
+      expect(s?.min).toBe(800 * 25_400);
+      expect(s?.outOfRange).toBe(false);
+    } finally {
+      process.env.USD_VND_RATE = saved;
+    }
   });
 });
