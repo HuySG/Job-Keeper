@@ -1,287 +1,195 @@
-import { getSourceHealth } from '@/api/ops.api';
-import {
-  getOverview,
-  getSalaryByLevel,
-  getSalaryByProvince,
-  getSalaryHistogram,
-  getSalaryOverall,
-  MIN_BAND_SAMPLE,
-} from '@/api/stats.api';
-import { BarList } from '@/components/charts/bar-list';
-import { ColumnChart } from '@/components/charts/column-chart';
-import { Meter } from '@/components/charts/meter';
-import { RangeBar, THIN_SAMPLE } from '@/components/charts/range-bar';
-import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card';
+import { findFieldJobs } from '@/api/field.api';
+import { BarRow } from '@/components/ui/bar-row';
+import { Callout } from '@/components/ui/callout';
 import { Cmd, Empty } from '@/components/ui/empty';
-import { PageHeader } from '@/components/ui/page-header';
-import { HeroStat, Stat, StatRow } from '@/components/ui/stat';
-import { Table, Td, Th, Tr } from '@/components/ui/table';
-import { questionFor } from '@/constants/nav';
-import { LEVEL_ORDER } from '@/enums';
-import { formatCount, formatPercent, levelLabel, millions } from '@/utils/format';
+import { Mascot } from '@/components/ui/mascot';
+import { Figure, Kicker } from '@/components/ui/stat';
+import { cx } from '@/components/ui/tone';
+import { DEFAULT_FIELD_SLUG } from '@/constants/field';
+import { FACET_NONE } from '@/lib/field-bands';
+import { buildUrl } from '@/lib/query';
+import { formatCount, formatPercent, millions } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Lương' };
 
 /**
- * Trang lương — trả lời **"mức nào là phổ biến, và bao nhiêu tin dám ghi số"**.
+ * Lương — trả lời **"ngành tôi trả bao nhiêu, và bao nhiêu tin dám ghi số"**.
  *
- * Câu thứ hai mới là thứ đáng giá. Không sàn nào công bố tỷ lệ tin ghi
- * "Thoả thuận", vì nó bất lợi cho khách hàng của họ là nhà tuyển dụng
- * (PLAN.md §1). Ta gom nhiều sàn nên đo được, và tự nó đã là một phát hiện.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Bản v2 thu trang này về NGÀNH CỦA BẠN, bỏ số toàn kho
  *
- * Mọi con số ở đây đều đi kèm cỡ mẫu. Một trung vị không có n bên cạnh là con
- * số không kiểm chứng được — và với vài chục tin thì nó lệch rất xa.
+ * Bản trước tính trên cả kho: trung vị của mọi nghề, mọi tỉnh trộn lẫn. Con số
+ * đó đúng mà vô dụng — người làm thu mua ở TP.HCM không thương lượng lương dựa
+ * trên trung vị của cả lập trình viên Hà Nội. Nay mọi con số ở đây đi qua cùng
+ * bộ chấm với trang Ngành, nên "104 tin ghi số" ở đây và "104/318" ở hero
+ * trang Ngành là MỘT con số, không phải hai con số tình cờ bằng nhau.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Câu thứ hai của trang — bao nhiêu tin dám ghi số — vẫn là thứ đáng giá nhất.
+ * Không sàn nào công bố tỷ lệ tin "Thoả thuận", vì nó bất lợi cho khách hàng
+ * của họ là nhà tuyển dụng. Mình gom nhiều sàn nên đo được.
+ *
+ * Mọi con số đi kèm cỡ mẫu. Một trung vị không có n bên cạnh là con số không
+ * kiểm chứng được — và với vài chục tin thì nó lệch rất xa.
  */
 export default async function SalaryPage() {
-  const [overall, byLevel, byProvince, histogram, overview, sources] = await Promise.all([
-    getSalaryOverall(),
-    getSalaryByLevel(),
-    getSalaryByProvince(10),
-    getSalaryHistogram(),
-    getOverview(),
-    getSourceHealth(),
-  ]);
+  const field = await findFieldJobs(DEFAULT_FIELD_SLUG);
 
-  const question = questionFor('/luong');
-
-  if (!overall) {
+  if (!field) {
     return (
-      <>
-        <PageHeader title="Lương" description={question} />
-        <Empty title="Chưa có tin nào ghi số lương">
-          Kho hiện có {formatCount(overview.alive)} tin còn hiệu lực nhưng chưa tin nào công khai
-          mức lương. Chạy thêm <Cmd>npm run crawl</Cmd> hoặc thu thập từ nguồn khác — mọi con số
-          trên trang này đều tính từ tin có ghi số, không suy đoán từ tin Thoả thuận.
-        </Empty>
-      </>
+      <Empty title="Chưa có ngành nào để tính lương">
+        Trang này tính lương trên đúng ngành của bạn. Chạy <Cmd>npm run db:seed</Cmd> để nạp ngành
+        mẫu, hoặc định nghĩa ngành ở trang Cài đặt.
+      </Empty>
     );
   }
 
-  const levels = byLevel
-    .map((band) => ({ ...band, label: levelLabel(band.key) }))
-    .sort((a, b) => LEVEL_ORDER.indexOf(a.key as never) - LEVEL_ORDER.indexOf(b.key as never));
+  const { stats, total } = field;
+  const negotiable = total - stats.salaryCount;
+  const scope = [field.name, ...field.provinceNames];
+  if (field.maxAgeDays) scope.push(`${field.maxAgeDays} ngày`);
 
-  const provinces = byProvince.map((band) => ({
-    ...band,
-    label: band.name,
-    href: '/viec?province=' + band.key + '&salaryOnly=1',
-  }));
+  const bands = field.facets.salary.filter((facet) => facet.value !== FACET_NONE);
+  const top = bands.reduce((best, band) => (band.count > best.count ? band : best), bands[0]!);
+  const ceil = Math.max(1, ...bands.map((band) => band.count));
+  const topShare = stats.salaryCount === 0 ? 0 : top.count / stats.salaryCount;
 
-  // Một thang cho CẢ hai biểu đồ khoảng. Mỗi biểu đồ tự co theo dữ liệu riêng
-  // thì hai hình cạnh nhau không so được với nhau, mà đó đúng là việc người
-  // đọc muốn làm khi đặt chúng cạnh nhau.
-  const ceil = Math.max(
-    20_000_000,
-    ...levels.map((band) => band.p75),
-    ...provinces.map((band) => band.p75),
-  );
-
-  const activeSources = sources.filter((source) => source.alive > 0);
+  // Chỉ số "mẫu nhỏ" của lời dặn cuối trang đếm trên mức CÓ tin ghi số — mức
+  // rỗng không có trung vị nào để bị lệch.
+  const levels = stats.salaryByExperience;
+  const samples = levels.map((level) => level.sample).filter((n) => n > 0);
 
   return (
     <>
-      <PageHeader title="Lương" description={question} />
-
-      <div className="space-y-4">
-        <Card>
-          <CardBody className="grid gap-6 lg:grid-cols-2 lg:gap-10">
-            <HeroStat
-              label="Trung vị lương, toàn kho"
-              value={millions(overall.median)}
-              unit="triệu / tháng"
-              sub={
-                <>
-                  nửa số tin nằm trong {millions(overall.p25)}–{millions(overall.p75)} triệu · tính
-                  trên {formatCount(overall.sample)} tin có ghi số
-                </>
-              }
+      <section className="brand-field px-4 py-9 text-text sm:px-6">
+        <div className="flex flex-wrap items-end gap-7">
+          <div className="min-w-0 flex-[1_1_380px]">
+            <Kicker>{scope.join(' · ')}</Kicker>
+            <h1 className="mb-2.5 text-[34px] leading-[1.03] text-pretty sm:text-[46px]">
+              Lương thật, chỉ tính trên tin dám ghi số
+            </h1>
+            <p className="max-w-135 text-base leading-normal text-pretty text-neutral-800">
+              {formatCount(stats.salaryCount)} trong {formatCount(total)} tin có ghi lương.{' '}
+              {formatCount(negotiable)} tin còn lại ghi “thoả thuận” — mình không đoán hộ.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-y-4">
+            <Figure
+              divided
+              label="Trung vị"
+              value={stats.salaryMedian === null ? '—' : `${millions(stats.salaryMedian)} tr`}
+              hint="Trung vị chứ không phải trung bình: vài tin giám đốc 150 triệu sẽ kéo lệch số trung bình."
             />
-
-            <div className="self-center">
-              <Meter
-                value={overall.sample}
-                max={overall.total}
-                label="Tin dám ghi số thay vì Thoả thuận"
-                caption={
-                  'Còn lại ' +
-                  formatCount(overall.total - overall.sample) +
-                  ' tin không cho biết mức lương. Không sàn nào công bố tỷ lệ này.'
-                }
-              />
-            </div>
-          </CardBody>
-        </Card>
-
-        <StatRow>
-          <Stat
-            label="Nhóm dưới (p25)"
-            value={millions(overall.p25) + ' tr'}
-            sub="25% tin trả thấp hơn mức này"
-          />
-          <Stat
-            label="Trung vị (p50)"
-            value={millions(overall.median) + ' tr'}
-            sub="một nửa trên, một nửa dưới"
-          />
-          <Stat
-            label="Nhóm trên (p75)"
-            value={millions(overall.p75) + ' tr'}
-            sub="25% tin trả cao hơn mức này"
-          />
-          <Stat
-            label="Cỡ mẫu"
-            value={formatCount(overall.sample)}
-            sub={'/ ' + formatCount(overall.total) + ' tin còn hiệu lực'}
-          />
-        </StatRow>
-
-        <Card>
-          <CardHead
-            title="Phân bố mức lương"
-            subtitle={
-              'Mỗi cột là một bậc 5 triệu, tính trên ' +
-              formatCount(overall.sample) +
-              ' tin có ghi số. Bậc cuối gộp tất cả tin từ 60 triệu trở lên.'
-            }
-          />
-          <CardBody>
-            <ColumnChart
-              height={160}
-              data={histogram.map((bucket) => ({
-                key: String(bucket.floor),
-                label: millions(bucket.floor),
-                value: bucket.count,
-                title:
-                  (bucket.floor >= 60_000_000
-                    ? 'từ 60 triệu trở lên'
-                    : millions(bucket.floor) +
-                      '–' +
-                      millions(bucket.floor + 5_000_000) +
-                      ' triệu') +
-                  ': ' +
-                  formatCount(bucket.count) +
-                  ' tin',
-              }))}
+            <Figure divided label="Có ghi số" value={formatCount(stats.salaryCount)} />
+            <Figure
+              divided
+              label="Thoả thuận"
+              value={formatCount(negotiable)}
+              hint={`${formatPercent(negotiable, total)} số tin trong ngành không cho biết mức lương`}
             />
-            <p className="mt-2 text-xs text-muted">Trục ngang: triệu đồng / tháng.</p>
-          </CardBody>
-          <CardFoot>
-            Tin ghi khoảng (ví dụ 15–20 triệu) được tính bằng trung điểm; tin chỉ ghi một đầu thì
-            lấy đầu đó. Tin Thoả thuận KHÔNG được quy thành 0 — một số 0 lọt vào là mọi trung vị
-            đều sai, và sai theo hướng không ai phát hiện được.
-          </CardFoot>
-        </Card>
-
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHead
-              title="Theo cấp bậc"
-              subtitle={
-                'Xếp theo bậc thăng tiến, không theo số tin. Nhóm dưới ' +
-                MIN_BAND_SAMPLE +
-                ' tin ghi lương không được vẽ — một tin lẻ không phải một phân bố.'
-              }
-            />
-            <CardBody>
-              {levels.length === 0 ? (
-                <Empty compact title="Chưa nhóm nào đủ tin ghi lương" />
-              ) : (
-                <RangeBar data={levels} floor={0} ceil={ceil} />
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHead
-              title="Theo tỉnh/thành"
-              subtitle={
-                'Mười nơi nhiều tin nhất, trong số những nơi có ít nhất ' +
-                MIN_BAND_SAMPLE +
-                ' tin ghi lương. Cả hai biểu đồ dùng CHUNG một thang để so được với nhau.'
-              }
-            />
-            <CardBody>
-              {provinces.length === 0 ? (
-                <Empty compact title="Chưa nơi nào đủ tin ghi lương" />
-              ) : (
-                <RangeBar data={provinces} floor={0} ceil={ceil} />
-              )}
-            </CardBody>
-          </Card>
+          </div>
         </div>
+      </section>
 
-        <Card>
-          <CardHead
-            title="Sàn nào dám ghi lương"
-            subtitle="Tỷ lệ tin công khai mức lương, tính trên tin còn hiệu lực của từng sàn."
-          />
-          <CardBody>
-            {activeSources.length === 0 ? (
-              <Empty compact title="Chưa sàn nào có tin còn hiệu lực" />
-            ) : (
-              <BarList
-                unit="tin có ghi lương"
-                data={activeSources.map((source) => ({
-                  key: source.code,
-                  label: source.name,
-                  value: source.withSalary,
-                  note:
-                    formatPercent(source.withSalary, source.alive) +
-                    ' / ' +
-                    formatCount(source.alive) +
-                    ' tin',
-                  href: '/viec?source=' + source.code + '&salaryOnly=1',
-                }))}
-              />
-            )}
-          </CardBody>
-        </Card>
+      {total === 0 ? (
+        <Empty title="Ngành chưa có tin nào">
+          Khi từ điển ngành nhận được tin, phân bố lương sẽ hiện ở đây.
+        </Empty>
+      ) : (
+        <section className="flex flex-wrap items-start">
+          <div className="min-w-0 flex-[1_1_420px] border-divider px-4 pt-7 pb-9 sm:px-6 md:border-r-2">
+            <h5 className="mb-4.5">Phân bố lương · {formatCount(stats.salaryCount)} tin</h5>
+            {/* Đọc được thì bấm được: dòng nói "15–25 tr nhiều tin nhất" cũng
+                chính là chỗ lọc lấy đúng nhóm đó ở trang Ngành. */}
+            <div className="flex flex-col gap-3.5 text-sm">
+              {bands.map((band, index) => {
+                const isTop = band === top && band.count > 0;
+                return (
+                  <a
+                    key={band.value}
+                    href={buildUrl('/nganh', {}, { luong: [band.value] })}
+                    title={`Lọc danh sách ngành theo mức ${band.label}`}
+                    className="fopt -mx-2 px-2 py-0.5 text-text hover:text-text"
+                  >
+                    <BarRow
+                      label={band.short ?? band.label}
+                      count={formatCount(band.count)}
+                      ratio={band.count / ceil}
+                      fill={isTop ? 'accent' : 'soft'}
+                      strong={isTop}
+                      height={26}
+                      labelWidth={96}
+                      countWidth={30}
+                      delay={index * 0.07}
+                      className="gap-3.5 [&_.bar-count]:font-extrabold"
+                    />
+                  </a>
+                );
+              })}
+            </div>
+            <p className="mt-4.5 text-[13px] text-pretty text-neutral-700">
+              {stats.salaryCount === 0
+                ? 'Chưa tin nào trong ngành ghi số lương.'
+                : topShare >= 0.5
+                  ? `Hơn nửa số tin có ghi lương nằm trong khoảng ${top.label.toLowerCase()} (${formatPercent(top.count, stats.salaryCount)}).`
+                  : `Nhiều tin nhất nằm trong khoảng ${top.label.toLowerCase()} — ${formatPercent(top.count, stats.salaryCount)} số tin có ghi lương.`}{' '}
+              Bấm một dòng để lọc danh sách theo khoảng đó.
+            </p>
+          </div>
 
-        {/* Bản song sinh đọc được của hai biểu đồ khoảng bên trên. Giá trị nào
-            chỉ nói bằng chiều dài thanh thì ở đây phải đọc được thành chữ. */}
-        <Card>
-          <CardHead
-            title="Bảng số liệu"
-            subtitle="Cùng dữ liệu với hai biểu đồ khoảng bên trên, ở dạng đọc được bằng trình đọc màn hình và sao chép được."
-          />
-          <CardBody className="p-0">
-            <Table caption="Phân vị lương theo cấp bậc và theo tỉnh/thành">
-              <thead>
-                <tr>
-                  <Th>Nhóm</Th>
-                  <Th numeric>p25</Th>
-                  <Th numeric>Trung vị</Th>
-                  <Th numeric>p75</Th>
-                  <Th numeric>Tin ghi lương</Th>
-                  <Th numeric>Tổng tin</Th>
-                  <Th numeric>Tỷ lệ ghi</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...levels, ...provinces].map((band) => (
-                  <Tr key={band.key}>
-                    <Td>
-                      {band.label}
-                      {band.sample < THIN_SAMPLE && (
-                        <span className="ml-1.5 text-xs text-warn-ink">mẫu mỏng</span>
-                      )}
-                    </Td>
-                    <Td numeric>{millions(band.p25)}</Td>
-                    <Td numeric>{millions(band.median)}</Td>
-                    <Td numeric>{millions(band.p75)}</Td>
-                    <Td numeric>{formatCount(band.sample)}</Td>
-                    <Td numeric>{formatCount(band.total)}</Td>
-                    <Td numeric>{formatPercent(band.sample, band.total)}</Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          </CardBody>
-          <CardFoot>Đơn vị: triệu đồng / tháng. Mẫu dưới {THIN_SAMPLE} tin được đánh dấu.</CardFoot>
-        </Card>
-      </div>
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-7 border-t-2 border-divider px-4 pt-7 pb-9 sm:px-6 md:border-t-0">
+            <div>
+              <h5 className="mb-4">Trung vị theo kinh nghiệm</h5>
+              <div className="flex flex-col border-b border-divider">
+                {levels.map((level) => {
+                  const above =
+                    level.median !== null &&
+                    stats.salaryMedian !== null &&
+                    level.median > stats.salaryMedian;
+                  return (
+                    <div
+                      key={level.value}
+                      className="flex items-baseline gap-3 border-t border-divider py-3"
+                      title={`${level.sample} trong ${level.count} tin của mức này có ghi số lương`}
+                    >
+                      <span className="flex-1 text-sm">{level.label}</span>
+                      <span className="tnum text-xs text-neutral-600">
+                        {formatCount(level.sample)}/{formatCount(level.count)} tin
+                      </span>
+                      <span
+                        className={cx(
+                          'w-18 text-right font-heading text-[17px] font-extrabold',
+                          above && 'text-accent-700',
+                          level.median === null && 'text-neutral-500',
+                        )}
+                      >
+                        {level.median === null ? '—' : `${millions(level.median)} tr`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2.5 text-xs text-neutral-700">
+                Cột giữa: số tin ghi lương / tổng số tin của mức. Tin không ghi số năm kinh nghiệm không
+                nằm trong bảng này.
+              </p>
+            </div>
+
+            <Callout
+              tone="ink"
+              align="start"
+              className="p-4.5"
+              icon={<Mascot pose="head" width={40} motion="none" />}
+            >
+              {samples.length === 0
+                ? 'Chưa mức kinh nghiệm nào có tin ghi số lương, nên chưa có trung vị nào để tin.'
+                : `Số trung vị tính trên mẫu nhỏ (${Math.min(...samples)}–${Math.max(...samples)} tin mỗi mức), nên coi là tham khảo chứ đừng mang đi đàm phán một mình.`}
+            </Callout>
+          </div>
+        </section>
+      )}
     </>
   );
 }

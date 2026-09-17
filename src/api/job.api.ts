@@ -38,7 +38,7 @@ export interface JobFilters {
 export type SortKey = 'moi' | 'luong' | 'han';
 
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: 'moi', label: 'Mới đăng' },
+  { value: 'moi', label: 'Mới nhất' },
   { value: 'luong', label: 'Lương cao' },
   { value: 'han', label: 'Sắp hết hạn' },
 ];

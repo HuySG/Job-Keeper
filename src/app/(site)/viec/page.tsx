@@ -1,18 +1,15 @@
-import {
-  findJobs,
-  getFilterOptions,
-  parseJobFilters,
-  SORT_OPTIONS,
-  type SortKey,
-} from '@/api/job.api';
-import { ActiveFilters } from '@/components/job/active-filters';
-import { FilterBar } from '@/components/job/filter-bar';
-import { JobCard } from '@/components/job/job-card';
+import { fieldJudge, findFieldJobs, getFieldDefinition } from '@/api/field.api';
+import { findJobs, getFilterOptions, parseJobFilters, PAGE_SIZE } from '@/api/job.api';
+import { getSaveContext } from '@/api/saved.api';
+import { getOverview } from '@/api/stats.api';
+import { JobTable, SHORT_RUNWAY_DAYS } from '@/components/job/job-table';
+import { JobToolbar } from '@/components/job/job-toolbar';
+import { Callout } from '@/components/ui/callout';
 import { Cmd, Empty } from '@/components/ui/empty';
-import { PageHeader } from '@/components/ui/page-header';
+import { Glyph } from '@/components/ui/glyph';
 import { Pagination } from '@/components/ui/pagination';
-import { SegmentedLinks } from '@/components/ui/segmented';
-import { questionFor } from '@/constants/nav';
+import { Kicker, StatCell, StatStrip } from '@/components/ui/stat';
+import { DEFAULT_FIELD_SLUG } from '@/constants/field';
 import { hasActiveFilter, type SearchParams } from '@/lib/query';
 import { formatCount } from '@/utils/format';
 
@@ -25,10 +22,9 @@ const PATH = '/viec';
 /**
  * Kho tin — trả lời **"tin nào khớp với thứ tôi đang tìm"**.
  *
- * Trước đây trang này chiếm luôn trang chủ, nên thứ duy nhất công cụ nói được
- * là "đây là một danh sách việc làm" — đúng cái việc mà TopCV làm tốt hơn và
- * có sẵn nút ứng tuyển. Đẩy nó về đây và để tổng quan lên trang chủ mới đúng
- * thứ tự giá trị: cái đáng xem trước là thứ không sàn đơn lẻ nào tính được.
+ * Toàn bộ tin đã gom, CHƯA lọc theo ngành. Dùng khi muốn tự tìm bằng từ khoá
+ * ngoài ngành đã định nghĩa — nên hero có sẵn nút quay về danh sách ngành,
+ * và mỗi dòng có ô vuông cho biết tin đó có nằm trong ngành không.
  */
 export default async function JobListPage({
   searchParams,
@@ -38,73 +34,113 @@ export default async function JobListPage({
   const params = await searchParams;
   const filters = parseJobFilters(params);
 
-  const [{ items, total, page, pageCount }, options] = await Promise.all([
+  const [page, options, overview, definition, field, save] = await Promise.all([
     findJobs(filters),
     getFilterOptions(),
+    getOverview(),
+    getFieldDefinition(DEFAULT_FIELD_SLUG),
+    findFieldJobs(DEFAULT_FIELD_SLUG),
+    getSaveContext(),
   ]);
 
+  const judge = definition ? fieldJudge(definition) : null;
+  const listedHere = judge ? page.items.filter((job) => judge(job).listed).length : 0;
+  const from = page.total === 0 ? 0 : (page.page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page.page * PAGE_SIZE, page.total);
   const filtered = hasActiveFilter(params);
-  const question = questionFor('/viec');
 
   return (
     <>
-      <PageHeader title="Kho tin" description={question} />
-
-      <div className="space-y-4">
-        <FilterBar options={options} params={params} />
-
-        <ActiveFilters
-          pathname={PATH}
-          params={params}
-          context={{
-            provinceNames: Object.fromEntries(options.provinces.map((p) => [p.slug, p.name])),
-            sourceNames: Object.fromEntries(options.sources.map((s) => [s.code, s.name])),
-          }}
-        />
-
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          {/* Chỉ nói về KẾT QUẢ đang xem. Bản trước ghép thêm "42% tin trong
-              kho có ghi lương" vào đây — một con số của toàn kho đứng cạnh một
-              con số của kết quả lọc, đọc xong không biết 42% là của cái gì. */}
-          <span>
-            <strong className="tnum">{formatCount(total)}</strong> tin
-            {filtered ? ' khớp bộ lọc' : ' còn hiệu lực'}
-          </span>
-
-          <SegmentedLinks
-            pathname={PATH}
-            params={params}
-            name="sort"
-            label="Sắp xếp:"
-            current={(filters.sort ?? 'moi') as SortKey}
-            options={SORT_OPTIONS}
-          />
+      <section className="brand-field px-4 pt-8 sm:px-6">
+        <div className="flex flex-wrap items-end gap-6 pb-6.5">
+          <div className="min-w-0 flex-[1_1_420px]">
+            <Kicker>Toàn bộ tin đã gom · chưa lọc theo ngành</Kicker>
+            <h1 className="mb-2.5 text-[34px] leading-[1.04] sm:text-[42px]">Kho tin</h1>
+            <p className="max-w-140 text-base leading-normal text-pretty text-neutral-800">
+              Dùng khi bạn muốn tự tìm bằng từ khoá, ngoài ngành mình đã lọc sẵn. Ô vuông đậm đầu dòng
+              là tin đúng ngành của bạn.
+            </p>
+          </div>
+          {field && (
+            <a
+              href="/nganh"
+              className="btn btn-secondary h-11 gap-2 border-accent-700 text-accent-800 hover:text-accent-800"
+            >
+              <Glyph name="funnel" size={15} />
+              Chỉ xem {formatCount(field.total)} tin đúng ngành
+            </a>
+          )}
         </div>
 
-        {items.length === 0 ? (
-          filtered ? (
-            <Empty title="Không tin nào khớp bộ lọc">
-              Thử gỡ bớt một điều kiện ở dải chip phía trên, hoặc{' '}
-              <a href={PATH} className="text-accent-ink underline underline-offset-2">
-                xem tất cả
-              </a>
-              .
-            </Empty>
-          ) : (
-            <Empty title="Kho đang trống">
-              Chạy <Cmd>npm run crawl -- --full</Cmd> để lấy tin về.
-            </Empty>
-          )
-        ) : (
-          <div className="grid gap-3">
-            {items.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        )}
+        <StatStrip tone="brand" className="[&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
+          <StatCell tone="brand" size="md" label="Tin còn hiệu lực" value={formatCount(overview.alive)} />
+          <StatCell
+            tone="brand"
+            size="md"
+            label="Đúng ngành bạn"
+            value={field ? formatCount(field.total) : '—'}
+            emphasis
+          />
+          <StatCell tone="brand" size="md" label="Mới trong 24h" value={formatCount(overview.postedLast24h)} />
+          <StatCell
+            tone="brand"
+            size="md"
+            label="Sàn đang trả tin"
+            value={overview.sourcesWithAlive}
+            unit={` / ${overview.activeSources}`}
+            hint="Sàn đang bật và đang có ít nhất một tin còn hiệu lực"
+          />
+        </StatStrip>
+      </section>
 
-        <Pagination pathname={PATH} params={params} page={page} pageCount={pageCount} />
-      </div>
+      <JobToolbar pathname={PATH} params={params} options={options} sort={filters.sort ?? 'moi'} />
+
+      {page.items.length === 0 ? (
+        filtered ? (
+          <Empty
+            title="Không tin nào khớp bộ lọc"
+            actions={
+              <a href={PATH} className="btn btn-primary h-11 px-5">
+                Xem tất cả tin còn hiệu lực
+              </a>
+            }
+          >
+            Thử gỡ bớt một chip ở thanh công cụ phía trên, hoặc gõ từ khoá ngắn hơn — mình tìm trong
+            tiêu đề, mô tả và tên công ty.
+          </Empty>
+        ) : (
+          <Empty title="Kho đang trống">
+            Chạy <Cmd>npm run crawl -- --full</Cmd> để mèo đi gom tin về.
+          </Empty>
+        )
+      ) : (
+        <>
+          <JobTable items={page.items} judge={judge} save={save} />
+
+          <div className="flex flex-wrap items-center gap-4 border-t-2 border-divider px-4 pt-5 pb-3 sm:px-6">
+            <p className="text-[13px] text-neutral-700">
+              Đang xem{' '}
+              <strong className="text-text">
+                {formatCount(from)}–{formatCount(to)}
+              </strong>{' '}
+              trong {formatCount(page.total)} tin
+              {judge && ` · ${listedHere} tin đúng ngành trên trang này`}
+            </p>
+            <div className="sm:ml-auto">
+              <Pagination pathname={PATH} params={params} page={page.page} pageCount={page.pageCount} />
+            </div>
+          </div>
+        </>
+      )}
+
+      <Callout
+        tone="brand"
+        className="mx-4 mt-3 mb-10 sm:mx-6"
+        icon={<Glyph name="shield" size={16} stroke="var(--color-accent-700)" />}
+      >
+        Cột “còn lại” lấy theo ngày hết hạn sàn nguồn ghi, không phải mình kiểm. Tin dưới{' '}
+        {SHORT_RUNWAY_DAYS} ngày mình để màu xám cho bạn để mắt.
+      </Callout>
     </>
   );
 }

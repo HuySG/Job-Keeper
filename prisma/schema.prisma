@@ -213,6 +213,7 @@ model JobPosting {
   locations JobLocation[]
   skills    JobSkill[]
   audits    JobAudit[]
+  saved     SavedJob?
 
   crawledAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -331,6 +332,32 @@ model JobLocation {
 
   @@id([postingId, locationId])
   @@index([locationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIN ĐÃ LƯU
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tin người dùng đánh dấu để theo dõi — bảng DUY NHẤT mà phần web được ghi.
+///
+/// Không có cột người dùng: đây là công cụ cá nhân, một kho một người. Quyền
+/// ghi được chặn ở tầng web bằng khoá `EDIT_KEY` (src/lib/edit-access.ts), không
+/// phải bằng khoá ngoại tới bảng tài khoản nào.
+///
+/// Trần 20 dòng đặt ở code (SAVED_JOB_LIMIT) chứ không ở đây — bảng này không
+/// bao giờ đủ lớn để tính vào ngân sách 0,5 GB của Neon.
+///
+/// `onDelete: Cascade`: tin bị xoá hẳn khỏi kho thì dấu lưu đi theo. Tin chỉ
+/// ĐÓNG (status CLOSED/EXPIRED) thì vẫn còn dòng, và trang "Tin đã lưu" nói
+/// thật là sàn đã đóng tin thay vì để nó lặng lẽ biến mất.
+model SavedJob {
+  id        Int        @id @default(autoincrement())
+  /// `@unique` vừa chặn lưu trùng vừa là index cho khoá ngoại.
+  postingId Int        @unique
+  posting   JobPosting @relation(fields: [postingId], references: [id], onDelete: Cascade)
+  savedAt   DateTime   @default(now())
+
+  @@index([savedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

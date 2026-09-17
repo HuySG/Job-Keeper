@@ -27,7 +27,7 @@ mới cho tới lần cào sau. Muốn tự động thì dùng GitHub Actions
 
 ---
 
-## 1. Biến môi trường — đúng MỘT cái
+## 1. Biến môi trường — một cái bắt buộc, một cái nên có
 
 Đã rà bằng grep toàn bộ `src/`: mọi biến khác (`CRAWLER_CONTACT_EMAIL`,
 `BLOB_DRIVER`, `USD_VND_RATE`, `R2_*`) chỉ được đọc trong module của crawler,
@@ -44,6 +44,40 @@ Ba điều về chuỗi này:
    là một kết nối mới; dùng chuỗi direct thì Neon hết slot rất nhanh.
 2. Đặt cho cả ba môi trường Production / Preview / Development.
 3. Đừng dán vào `vercel.json` hay bất cứ file nào được commit. Nó là mật khẩu.
+
+```
+EDIT_KEY = <một chuỗi ngẫu nhiên dài, ví dụ: openssl rand -base64 24>
+```
+
+Từ bản giao diện v2, web GHI được hai thứ: **tin đã lưu** và **từ điển ngành**.
+Trang chạy công khai không đăng nhập, nên hai đường ghi đó bị khoá sau biến này
+([src/lib/edit-access.ts](../src/lib/edit-access.ts)):
+
+- **Không đặt** → bản production ở chế độ chỉ đọc: nút lưu mờ đi, trang Cài đặt
+  xem trước được nhưng không lưu được. Mặc định khoá là cố ý — quên đặt biến
+  thì mất tính năng, chứ không mở toang cho người lạ sửa từ điển.
+- **Có đặt** → mở trang `/cai-dat`, nhập đúng chuỗi này một lần; trình duyệt
+  giữ quyền sửa 180 ngày. Đổi giá trị biến là thu hồi quyền trên mọi máy.
+- Máy dev (`npm run dev`) không cần biến này — ghi được luôn.
+
+---
+
+### Bảng mới phải có TRƯỚC khi deploy
+
+Bản v2 thêm bảng `SavedJob`. Chạy **một lần** từ máy, trước khi đẩy code lên:
+
+```bash
+npm run db:push
+```
+
+Đã soát bằng `prisma migrate diff`: lệnh này chỉ `CREATE TABLE "SavedJob"` kèm
+hai index và một khoá ngoại — không xoá, không đổi cột nào của bảng cũ. Quay
+lại thì `DROP TABLE "SavedJob";`.
+
+Quên bước này thì trang vẫn chạy: nút lưu ẩn đi, trang Tin đã lưu nói thẳng là
+thiếu bảng, và `npm run recheck` bỏ qua phần ưu tiên tin đã lưu. Workflow
+GitHub Actions **không** tự chạy `db:push` — lệnh đó có thể xoá dữ liệu khi
+schema lệch, nên không được chạy tự động.
 
 ---
 
@@ -74,7 +108,7 @@ Repo đã có sẵn: `https://github.com/HuySG/Job-Keeper.git`
      Prisma Client thì sẽ chạy nhầm client cũ và lỗi rất khó hiểu.
    - Output Directory: `.next`
    - Install Command: `npm install`
-3. Mở **Environment Variables**, thêm `DATABASE_URL` (mục 1) cho cả ba môi trường.
+3. Mở **Environment Variables**, thêm `DATABASE_URL` và `EDIT_KEY` (mục 1) cho cả ba môi trường.
 4. **Deploy**.
 
 Từ đó mỗi lần `git push` lên `master` là Vercel tự deploy production; mỗi nhánh
@@ -93,6 +127,7 @@ terminal:
 $env:VERCEL_TOKEN = "<token vừa tạo>"
 npx vercel link --yes --token $env:VERCEL_TOKEN
 npx vercel env add DATABASE_URL production --token $env:VERCEL_TOKEN
+npx vercel env add EDIT_KEY production --token $env:VERCEL_TOKEN
 npx vercel --prod --token $env:VERCEL_TOKEN
 ```
 

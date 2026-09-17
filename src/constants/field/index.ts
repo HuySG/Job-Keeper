@@ -28,6 +28,21 @@
  */
 export const GRAY_PREFIX = '~';
 
+/**
+ * Ngành mà mọi trang dùng khi URL không chỉ định `?f=`.
+ *
+ * Tổng quan, Kho tin, Lương và Nguồn đều nói về "ngành của bạn" ở số ít — công
+ * cụ này là của một người. Có thêm ngành thì trang Ngành và Cài đặt đổi được
+ * bằng `?f=`, còn bốn trang kia vẫn neo vào ngành này.
+ */
+export const DEFAULT_FIELD_SLUG = 'thu-mua-hcm';
+
+/**
+ * Coi là "vừa kiểm" nếu đã gọi HTTP/API vào tận trang tin trong ngần này giờ.
+ * Ở đây chứ không ở `api/field.api` vì giao diện phía trình duyệt cũng cần.
+ */
+export const FRESH_CHECK_HOURS = 48;
+
 export interface FieldSeed {
   slug: string;
   name: string;

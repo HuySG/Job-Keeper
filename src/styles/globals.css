@@ -1,59 +1,44 @@
 @import 'tailwindcss';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   HỆ MÀU "MODERNIST" — một chỗ duy nhất, mọi thứ khác chỉ gọi tên vai trò
+   BAE-JOB v2 — hệ Modernist, nhuộm xanh lá pastel
    ═══════════════════════════════════════════════════════════════════════════
 
-   Nguồn sự thật: `modernist.css` trong bộ bàn giao từ Claude Design. File này
-   KHÔNG chép lại nguyên xi mà DỊCH sang tên vai trò mà các component trong
-   `src/components` đã gọi sẵn (`bg-surface`, `text-muted`, `border-border`…).
-   Nhờ vậy đổi hệ màu là đổi đúng một file: bốn trang còn lại tự ăn theo mà
-   không phải sửa một dòng JSX nào.
+   Nguồn sự thật: `Bae-Job v2.dc.html` + `modernist/styles.css` trong bộ bàn
+   giao từ Claude Design. Bản v2 giữ NGUYÊN khung của Modernist — góc vuông,
+   vạch 2px, Archivo 800, lưới lộ ra — và chỉ thay một thứ: vai trò `accent`
+   không còn là đỏ #ec3013 mà là xanh lá đậm #2c7857, kèm một trường màu pastel
+   (`brand`) làm nền cho các dải hero.
 
-   Bốn nhóm token, KHÔNG được trộn vào nhau:
+   File này có BA tầng, không được trộn:
 
-     1. Nền & chữ   — dựng khung, xám ẤM trung tính
-     2. Thang màu   — neutral/accent/accent-2, mỗi thang 9 bậc, dùng khi cần
-                      gọi đích danh một bậc (nền tối, thanh biểu đồ nhạt…)
-     3. Trạng thái  — good/warn/serious/critical. DÀNH RIÊNG cho trạng thái,
-                      không bao giờ mượn làm "màu thứ tư" của biểu đồ
-     4. Dữ liệu     — series 1–8 cho biểu đồ phân loại, ramp cho biểu đồ độ lớn
+     1. `@theme`       — token. Tên giữ đúng như bản thiết kế (`--color-bg`,
+                         `--color-divider`, `--color-accent-700`…) để lớp CSS
+                         thành phần bên dưới chép sang được mà không phải dịch.
+     2. `@layer components` — lớp thành phần của Modernist (`.btn`, `.tag`,
+                         `.input`, `.seg`, `.table`, `.hr`) cộng các lớp chuyển
+                         động của bản v2. JSX gọi thẳng tên lớp, rồi dùng
+                         utility của Tailwind để dàn trang.
+     3. Không lớp      — hai bảng màu (`data-theme`) và công tắc chuyển động
+                         (`data-motion`). Để NGOÀI mọi layer là cố ý: CSS không
+                         lớp luôn thắng CSS có lớp, nên đổi bảng màu không phụ
+                         thuộc thứ tự khai báo.
 
-   ĐÃ BỎ CHẾ ĐỘ TỐI (quyết định của chủ dự án, 10/09/2026). Modernist không có
-   bảng tối, và dựng một bảng tối "suy ra" thì nó không còn là hệ đã được kiểm.
-   Hệ quả phải biết: máy để ở chế độ tối vẫn thấy trang sáng. `color-scheme`
-   dưới đây khai `light` để trình duyệt tô thanh cuộn và ô nhập cho đúng, thay
-   vì tự đảo màu form control.
+   Vẫn KHÔNG có chế độ tối (quyết định 10/09/2026). "Xanh dương" là một bảng
+   màu thứ hai trên cùng nền sáng, không phải một chế độ tối trá hình.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @theme {
   /* ── Nền & chữ ─────────────────────────────────────────────────────────── */
-
-  /* `canvas` là nền trang (`--color-bg` của Modernist); `surface` SÁNG HƠN
-     canvas chứ không tối hơn — thẻ nổi lên bằng độ sáng, không bằng viền. */
-  --color-canvas: #f3f2f2;
-  --color-surface: #f8f4f4;
-  --color-inset: #eae7e7;
-
-  /* Đường kẻ của Modernist là MỰC TRONG SUỐT chứ không phải một màu xám cố
-     định: cùng một token đặt trên nền sáng hay nền tối đều ra đúng sắc độ.
-     Đây là lý do dải chỉ số nền đen ở trang Ngành không cần token riêng. */
-  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
-  --color-border: color-mix(in srgb, #201e1d 40%, transparent);
-  --color-border-strong: color-mix(in srgb, #201e1d 62%, transparent);
-
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
   --color-text: #201e1d;
-  --color-muted: #605d5d;
-  --color-faint: #7d7979;
 
-  /* Nhãn hiệu = đỏ Modernist. `accent` để TÔ MẢNG, `accent-ink` để VIẾT CHỮ:
-     #ec3013 trên nền kem chỉ đạt 4.05:1, hụt sàn 4.5:1 của chữ cỡ thường.
-     #ae1800 (accent-700) đạt 7.1:1 — đây là màu của con số lương và của link. */
-  --color-accent: #ec3013;
-  --color-accent-ink: #ae1800;
-  --color-accent-soft: #fff2ef;
+  /* Đường kẻ là MỰC TRONG SUỐT, không phải một màu xám cố định: đặt lên nền
+     kem, nền pastel hay nền xám đều ra đúng sắc độ mà không cần token riêng. */
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
 
-  /* ── Thang neutral ─────────────────────────────────────────────────────── */
+  /* ── Thang neutral — sinh trong OKLCH, cùng thang sáng với accent ─────── */
   --color-neutral-100: #f8f4f4;
   --color-neutral-200: #eae7e7;
   --color-neutral-300: #d7d3d3;
@@ -64,106 +49,66 @@
   --color-neutral-800: #444141;
   --color-neutral-900: #2d2b2b;
 
-  /* ── Thang accent ──────────────────────────────────────────────────────── */
-  --color-accent-100: #fff2ef;
-  --color-accent-200: #ffe0d9;
-  --color-accent-300: #ffc4b8;
-  --color-accent-400: #ff9783;
-  --color-accent-500: #ff563c;
-  --color-accent-600: #dd2b0f;
-  --color-accent-700: #ae1800;
-  --color-accent-800: #7c1405;
-  --color-accent-900: #4d170e;
+  /* ── Accent: xanh lá ───────────────────────────────────────────────────── */
+  /* ĐỌC KỸ: ở bảng này `accent` (#2c7857) TRÙNG `accent-700` và TỐI HƠN
+     `accent-600`. Bản thiết kế cố ý như vậy — nút chính khi trỏ vào thì SÁNG
+     lên chứ không sẫm xuống. Đừng "sửa" thứ tự thang cho thẳng.
 
-  /* ── Thang accent-2 ────────────────────────────────────────────────────── */
-  --color-accent-2: #e15b47;
-  --color-accent-2-100: #fff2ef;
-  --color-accent-2-200: #ffe0da;
-  --color-accent-2-300: #ffc4b9;
-  --color-accent-2-400: #ff9784;
-  --color-accent-2-500: #ef6853;
-  --color-accent-2-600: #c94b39;
-  --color-accent-2-700: #9e3526;
-  --color-accent-2-800: #71261b;
-  --color-accent-2-900: #471d16;
+     #2c7857 trên nền kem đạt 5,1:1, đủ cho chữ thường — nên khác bản đỏ, ở đây
+     con số lương và liên kết dùng thẳng `accent-700` mà không cần token mực
+     riêng. */
+  --color-accent: #2c7857;
+  --color-accent-100: #eef9f2;
+  --color-accent-200: #d9f2e4;
+  --color-accent-300: #b7e5cb;
+  --color-accent-400: #8ed3ad;
+  --color-accent-500: #5cb98c;
+  --color-accent-600: #3f9d71;
+  --color-accent-700: #2c7857;
+  --color-accent-800: #1f5a41;
+  --color-accent-900: #143f2d;
 
-  /* ── Trạng thái ────────────────────────────────────────────────────────── */
-  /*
-   * ĐÁNH ĐỔI PHẢI BIẾT: nhãn hiệu của hệ này LÀ MÀU ĐỎ, nên "đỏ báo nguy" mất
-   * phần lớn sức cảnh báo — mắt đã thấy đỏ ở khắp nơi (nút chính, con số lương,
-   * dải hero). Hai cách bù, dùng CẢ HAI:
-   *
-   *   1. `critical` đặt TỐI HƠN HẲN accent (#a01b10 vs #ec3013). Khác biệt là
-   *      độ sáng chứ không phải sắc — đọc được cả khi in đen trắng.
-   *   2. `Badge` luôn vẽ CHẤM + CHỮ, không bao giờ chỉ có màu. Xem `ui/badge`.
-   *
-   * Bốn sắc dưới đây tách nhau bằng cả sắc lẫn độ sáng, và đều ngả ấm để không
-   * chỏi với nền kem.
-   */
-  --color-good: #1f8f3d;
-  --color-good-ink: #14672c;
-  --color-good-soft: #e7f2e6;
+  /* ── Trường màu thương hiệu ────────────────────────────────────────────── */
+  /* `brand` là nền của dải hero, `brand-soft` là nền ngoài khung trang và của
+     các hộp ghi chú. Chữ đặt trên `brand` luôn dùng `accent-800` trở lên —
+     `accent` đặt trên `brand` chỉ còn 3,6:1. */
+  --color-brand: #b7e5cb;
+  --color-brand-soft: #eef9f2;
+  --color-brand-mid: #8ed3ad;
+
+  /* ── Còn-sống ──────────────────────────────────────────────────────────── */
+  /* Tách khỏi `accent` dù đang cùng giá trị: đây là màu của TRẠNG THÁI "tin
+     vừa được kiểm còn mở", không phải màu nhãn hiệu. Ngày nào đổi bảng màu
+     sang một sắc không đọc được là "còn sống", chỉ phải sửa ba dòng này. */
+  --color-live: #2c7857;
+  --color-live-100: #eef9f2;
+  --color-live-700: #1f5a41;
+
+  /* ── Linh vật ──────────────────────────────────────────────────────────── */
+  --color-cat: #e8913f;
+
+  /* ── Cảnh báo ──────────────────────────────────────────────────────────── */
+  /* Bản thiết kế không vẽ trạng thái xấu nào — mọi tin mẫu đều khớp chắc và
+     còn hạn. Dữ liệu thật thì có: tin khớp yếu, tin sắp hết hạn, lượt quét
+     hỏng. Hai sắc dưới đây ngả ấm để không chỏi với nền kem, và tách khỏi xanh
+     bằng CẢ sắc lẫn độ sáng. Luôn đi kèm chữ, không bao giờ chỉ có màu. */
   --color-warn: #d99000;
-  --color-warn-ink: #8a5a00;
+  --color-warn-ink: #7a4f00;
   --color-warn-soft: #faf0d9;
-  --color-serious: #c05621;
-  --color-serious-ink: #8a3a12;
-  --color-serious-soft: #f8e5d8;
   --color-critical: #a01b10;
   --color-critical-ink: #7c140b;
   --color-critical-soft: #f6ddd8;
 
-  /* ── Dữ liệu: 8 ô phân loại, thứ tự CỐ ĐỊNH ────────────────────────────── */
-  /* Modernist không kèm bộ màu phân loại. Bộ dưới đây neo ô thứ nhất vào đúng
-     màu nhãn hiệu rồi rẽ sang các sắc tách bạc — vẫn ngả ấm, nhưng đủ xa nhau
-     để đọc được khi tám mảng đứng cạnh nhau. */
-  --color-series-1: #ec3013;
-  --color-series-2: #2d6a8f;
-  --color-series-3: #d99000;
-  --color-series-4: #4a7c3f;
-  --color-series-5: #8c4a9e;
-  --color-series-6: #c94b39;
-  --color-series-7: #35606b;
-  --color-series-8: #7c1405;
-
-  /* ── Dữ liệu: ramp một sắc cho ĐỘ LỚN (nhạt = ít, đậm = nhiều) ─────────── */
-  /* Bậc 4 cố ý rơi đúng vào `accent-300` — đó là màu thanh biểu đồ trong bản
-     thiết kế, và `BarList` lấy `bg-ramp-4` làm màu thanh mặc định. Thanh mặc
-     định phải NHẠT để thanh đang được lọc (tô `accent` đỏ đặc) nổi hẳn lên. */
-  --color-ramp-1: #fff2ef;
-  --color-ramp-2: #ffe0d9;
-  --color-ramp-3: #ffd2c8;
-  --color-ramp-4: #ffc4b8;
-  --color-ramp-5: #ff9783;
-  --color-ramp-6: #ff563c;
-
-  /* ── Đường kẻ của biểu đồ: mảnh, LIỀN NÉT, lùi hẳn ra sau ──────────────── */
-  --color-grid: #eae7e7;
-  --color-axis: color-mix(in srgb, #201e1d 40%, transparent);
+  /* ── Chữ ───────────────────────────────────────────────────────────────── */
+  /* `--font-archivo` do `next/font` đặt vào thẻ <html>; xem `app/layout.tsx`. */
+  --font-heading: var(--font-archivo), system-ui, sans-serif;
+  --font-body: var(--font-archivo), system-ui, sans-serif;
+  --font-sans: var(--font-archivo), system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* ── Hình khối ─────────────────────────────────────────────────────────── */
-  /* Modernist bo góc 0 ở MỌI cỡ. Giữ tên `radius-card` để không phải đi sửa
-     `rounded-card` rải khắp component — đổi ở đây là đổi cả app. */
-  --radius-card: 0px;
-
-  /* ── Chữ ───────────────────────────────────────────────────────────────── */
-  /* `--font-archivo` do `next/font` đặt vào thẻ <html>; xem `app/layout.tsx`.
-     Dự phòng vẫn phải đủ dài: mạng hỏng thì trang vẫn đọc được. */
-  --font-sans: var(--font-archivo), system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
-
-/*
- * Bo góc 0 cho MỌI utility bo góc, không riêng `rounded-card`.
- *
- * Component có sẵn dùng đủ loại `rounded-lg`, `rounded-md`, `rounded-full`,
- * `rounded-[4px]`… Ghi đè biến của Tailwind ở một chỗ rẻ hơn nhiều so với đi
- * lục từng file — và quan trọng hơn: nó khiến component viết sau này không thể
- * lỡ tay bo góc lệch hệ.
- *
- * NGOẠI LỆ `rounded-full`: ô tích tròn và chấm của `Badge` vẫn phải tròn. Giữ
- * `--radius-full` nguyên vẹn, chỉ hạ các bậc có kích thước.
- */
-@theme {
+  /* Modernist bo góc 0 ở MỌI cỡ. Ghi đè cả thang của Tailwind để component
+     viết sau này không thể lỡ tay bo góc lệch hệ. `--radius-full` giữ nguyên:
+     chấm tròn của ô radio vẫn phải tròn. */
   --radius-xs: 0px;
   --radius-sm: 0px;
   --radius-md: 0px;
@@ -172,61 +117,896 @@
   --radius-2xl: 0px;
   --radius-3xl: 0px;
   --radius-4xl: 0px;
+
+  /* ── Độ nổi — suy từ nền, bóng ngả mực ────────────────────────────────── */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  /* ── Nhịp chuyển động ──────────────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Thang khoảng cách của Modernist. Không phải namespace của Tailwind nên để
+   ngoài `@theme` — lớp thành phần bên dưới gọi thẳng. */
 :root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
   color-scheme: light;
 }
 
-html {
-  background: var(--color-canvas);
+/* ═══════════════════════════════════════════════════════════════════════════
+   BẢNG MÀU THỨ HAI — xanh dương
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Chỉ đổi đúng những biến bản thiết kế đổi: thang accent, trường màu và màu
+   còn-sống. Nền, chữ, đường kẻ, linh vật và màu cảnh báo đứng yên — đổi bảng
+   màu mà mèo đổi màu lông là đổi nhầm chỗ. */
+[data-theme='blue'] {
+  --color-accent: #0d4794;
+  --color-accent-100: #e7f0fd;
+  --color-accent-200: #c7ddfa;
+  --color-accent-300: #93bdf4;
+  --color-accent-400: #4e93ea;
+  --color-accent-500: #1668d6;
+  --color-accent-600: #1159ba;
+  --color-accent-700: #0d4794;
+  --color-accent-800: #0a3670;
+  --color-accent-900: #072649;
+  --color-brand: #c7ddfa;
+  --color-brand-soft: #e7f0fd;
+  --color-brand-mid: #93bdf4;
+  --color-live: #0d4794;
+  --color-live-100: #e7f0fd;
+  --color-live-700: #0a3670;
 }
 
-body {
-  background: var(--color-canvas);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.55;
+/* ═══════════════════════════════════════════════════════════════════════════
+   NỀN TẢNG
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  /* Nền NGOÀI khung trang là pastel; khung 1440px bên trong mới là nền kem.
+     Trên màn rộng, hai dải pastel hai bên là thứ cho biết trang có mép. */
+  html,
+  body {
+    background: var(--color-brand-soft);
+  }
+
+  body {
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0;
+  }
+  h1 {
+    font-size: 42px;
+  }
+  h2 {
+    font-size: 32px;
+  }
+  h3 {
+    font-size: 25px;
+  }
+  h4 {
+    font-size: 20px;
+  }
+  h5 {
+    font-size: 16px;
+  }
+  h6 {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  a {
+    color: var(--color-accent-700);
+    text-decoration: none;
+    text-underline-offset: 3px;
+  }
+  a:hover {
+    color: var(--color-accent);
+  }
+
+  /* Vòng focus theo hệ: 2px accent, lùi 2px, góc vuông. Không bao giờ để
+     vòng xanh mặc định của trình duyệt. */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
 }
 
-/* Tiêu đề của Modernist là Archivo 800, sát chữ và sát dòng. Đặt ở đây thay vì
-   rắc `font-extrabold tracking-tight` lên từng thẻ h1–h6 trong JSX. */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+/* ═══════════════════════════════════════════════════════════════════════════
+   THÀNH PHẦN — chép từ Modernist, cộng lớp chuyển động của bản v2
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* ── Vạch ──────────────────────────────────────────────────────────────── */
+  .hr {
+    height: 2px;
+    border: 0;
+    margin: 0;
+    background: var(--color-divider);
+  }
+
+  /* ── Nút ───────────────────────────────────────────────────────────────── */
+  /* Nhãn dạt TRÁI kể cả khi nút rộng hơn nhãn — luật của Modernist. Nút
+     `btn-block` vì thế đọc như một dòng chữ có mũi tên, không như một viên
+     thuốc căn giữa. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 14px;
+    line-height: 1.2;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    padding: var(--space-2) calc(var(--space-3) * 1.2);
+    white-space: nowrap;
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.14s ease,
+      background-color 0.14s ease,
+      color 0.14s ease,
+      border-color 0.14s ease;
+  }
+  .btn svg {
+    display: block;
+  }
+  /* Nhấc 1px khi trỏ, lún 1px khi bấm. */
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .btn-primary,
+  .btn-primary:hover {
+    background: var(--color-accent);
+    color: var(--color-bg);
+  }
+  .btn-primary:hover {
+    background: var(--color-accent-600);
+    box-shadow: var(--shadow-md);
+  }
+  .btn-primary:active {
+    background: var(--color-accent-700);
+  }
+
+  .btn-secondary,
+  .btn-secondary:hover {
+    border-color: var(--color-divider);
+    color: var(--color-text);
+  }
+  .btn-secondary:hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .btn-secondary:active {
+    background: color-mix(in srgb, var(--color-text) 14%, transparent);
+  }
+
+  .btn-ghost,
+  .btn-ghost:hover {
+    color: var(--color-accent);
+    padding-inline: var(--space-1);
+  }
+  .btn-ghost:hover {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+  .btn-ghost:active {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+  .btn-block {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* ── Nhãn ──────────────────────────────────────────────────────────────── */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    padding: 3px 10px;
+    color: var(--color-text);
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.14s ease,
+      background-color 0.14s ease;
+  }
+  a.tag:hover,
+  button.tag:hover,
+  label.tag:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  .tag-accent,
+  .tag-accent:hover {
+    background: var(--color-accent-100);
+    color: var(--color-accent-800);
+  }
+  .tag-neutral,
+  .tag-neutral:hover {
+    background: var(--color-neutral-100);
+    color: var(--color-neutral-800);
+  }
+  .tag-outline,
+  .tag-outline:hover {
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+  }
+  /* Nhãn đặc: bộ lọc ĐANG BẬT, từ khoá đang dùng. */
+  .tag-solid,
+  .tag-solid:hover {
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 800;
+  }
+  /* Nhãn mực: chip "đang lọc" gỡ được, như ở thanh công cụ kho tin. */
+  .tag-ink,
+  .tag-ink:hover {
+    background: var(--color-text);
+    color: var(--color-neutral-100);
+  }
+  .tag-warn,
+  .tag-warn:hover {
+    background: var(--color-warn-soft);
+    color: var(--color-warn-ink);
+  }
+
+  /* ── Ô nhập ────────────────────────────────────────────────────────────── */
+  .input {
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--color-text);
+    caret-color: var(--color-accent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    transition:
+      border-color 0.14s ease,
+      box-shadow 0.14s ease;
+  }
+  .input::placeholder {
+    color: var(--color-neutral-600);
+  }
+  .input:hover {
+    border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+  }
+  .input:focus-visible {
+    border-color: var(--color-accent);
+    outline-offset: 0;
+  }
+
+  /* ── Dãy lựa chọn ──────────────────────────────────────────────────────── */
+  /* Hai kiểu dùng: ô radio thật (`input:checked`) và liên kết mang
+     `aria-current` — trang dựng trên máy chủ nên phần lớn dãy lựa chọn ở đây
+     là liên kết, chạy được khi chưa có JavaScript. */
+  .seg {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--color-divider);
+  }
+  .seg-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--color-text);
+    white-space: nowrap;
+  }
+  .seg-opt input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .seg-opt + .seg-opt {
+    border-left: 1px solid var(--color-divider);
+  }
+  .seg-opt:has(input:checked),
+  .seg-opt[aria-current='true'],
+  .seg-opt[aria-current='true']:hover {
+    background: var(--color-accent);
+    color: var(--color-bg);
+  }
+  .seg-opt:not(:has(input:checked)):not([aria-current='true']):hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+    color: var(--color-text);
+  }
+  .seg-opt:has(input:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  /* ── Bảng ──────────────────────────────────────────────────────────────── */
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-text) 60%, transparent);
+    padding: var(--space-2);
+    border-bottom: 2px solid var(--color-divider);
+  }
+  .table td {
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--color-divider);
+    vertical-align: middle;
+  }
+
+  /* ── Liên kết điều hướng: gạch chân mọc từ trái khi trỏ vào ────────────── */
+  .navlink {
+    position: relative;
+    transition:
+      color 0.14s ease,
+      border-color 0.14s ease;
+  }
+  .navlink::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: var(--color-accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s var(--ease-out-soft);
+  }
+  .navlink:hover::after {
+    transform: scaleX(1);
+  }
+
+  /* ── Thẻ tin, dòng tin, ô lọc ──────────────────────────────────────────── */
+  .jcard {
+    transition:
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .jcard:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+  }
+  .jrow {
+    transition:
+      background-color 0.14s ease,
+      box-shadow 0.16s ease;
+  }
+  .jrow:hover {
+    background: var(--color-accent-100);
+    box-shadow: inset 4px 0 0 var(--color-accent);
+  }
+  .fopt {
+    transition: background-color 0.12s ease;
+  }
+  .fopt:hover {
+    background: var(--color-accent-100);
+  }
+  .fopt:hover .bar-fill,
+  .srcrow:hover .bar-fill {
+    filter: saturate(1.35);
+  }
+
+  /* ── Chuyển động dùng lại ──────────────────────────────────────────────── */
+  .bar-fill {
+    display: block;
+    transform-origin: left;
+    animation: grow 0.8s var(--ease-out-soft) both;
+  }
+  .live-dot {
+    display: inline-block;
+    flex: none;
+    background: var(--color-live);
+    animation:
+      pulse 1.9s ease-in-out infinite,
+      ripple 1.9s ease-out infinite;
+  }
+  .rise {
+    animation: rise 0.42s var(--ease-out-soft) both;
+  }
+  .rise-list > * {
+    animation: rise 0.44s var(--ease-out-soft) both;
+  }
+  .rise-list > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .rise-list > *:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .rise-list > *:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .rise-list > *:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+  .rise-list > *:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+  .rise-list > *:nth-child(7) {
+    animation-delay: 0.36s;
+  }
+  .rise-list > *:nth-child(n + 8) {
+    animation-delay: 0.42s;
+  }
+  .popwrap > * {
+    animation: pop 0.32s var(--ease-out-soft) both;
+  }
+  .popwrap > *:nth-child(2) {
+    animation-delay: 0.04s;
+  }
+  .popwrap > *:nth-child(3) {
+    animation-delay: 0.08s;
+  }
+  .popwrap > *:nth-child(4) {
+    animation-delay: 0.12s;
+  }
+  .popwrap > *:nth-child(5) {
+    animation-delay: 0.16s;
+  }
+  .popwrap > *:nth-child(6) {
+    animation-delay: 0.2s;
+  }
+  .popwrap > *:nth-child(n + 7) {
+    animation-delay: 0.24s;
+  }
+
+  /* Trường màu pastel có một vạch mảnh quét ngang như đầu đọc. */
+  .brand-field {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-brand);
+  }
+  .brand-field::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 26%;
+    height: 2px;
+    background: var(--color-accent-700);
+    opacity: 0.45;
+    animation: sweep 7s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+    pointer-events: none;
+  }
+
+  /* ── Linh vật ──────────────────────────────────────────────────────────── */
+  .cat-bob {
+    animation: bob 3.4s ease-in-out infinite;
+  }
+  .px-eye {
+    animation:
+      pxblink 5.2s steps(1, end) infinite,
+      pxlook 7.4s steps(1, end) infinite;
+  }
+  /* `opacity: 0` ở trạng thái nghỉ là bắt buộc. Bản thiết kế chỉ ẩn mắt nhắm
+     bằng keyframe, nên khi TẮT chuyển động thì mắt nhắm hiện đè lên mắt mở và
+     mèo lim dim mãi mãi. */
+  .px-eyec {
+    opacity: 0;
+    animation: pxblinkc 5.2s steps(1, end) infinite;
+  }
+  .px-tail {
+    animation: pxtail 1.6s steps(1, end) infinite;
+  }
+  .breathe {
+    transform-origin: bottom center;
+    animation: breathe 4.4s ease-in-out infinite;
+  }
+  .z1 {
+    animation: zzz 3.2s steps(5, end) infinite;
+  }
+  .z2 {
+    animation: zzz 3.2s steps(5, end) 0.7s infinite;
+  }
+  .z3 {
+    animation: zzz 3.2s steps(5, end) 1.4s infinite;
+  }
+  .paw1 {
+    animation: pawstep 1s steps(4, end) infinite;
+  }
+  .paw2 {
+    animation: pawstep 1s steps(4, end) 0.5s infinite;
+  }
+  .shake {
+    animation: shake 0.4s ease both;
+  }
+
+  /* ── Chờ dữ liệu & phản hồi ────────────────────────────────────────────── */
+  .skel {
+    display: block;
+    background: linear-gradient(
+      90deg,
+      var(--color-neutral-200) 20%,
+      var(--color-neutral-300) 40%,
+      var(--color-neutral-200) 60%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+  .toast {
+    animation: toastin 0.34s var(--ease-out-soft) both;
+  }
+  .dlg-back {
+    animation: fadein 0.2s ease both;
+  }
+  .dlg {
+    animation: dlgin 0.3s var(--ease-out-soft) both;
+  }
+  .spinsq {
+    animation: spinsq 1.1s steps(8, end) infinite;
+  }
+  .drawcheck {
+    stroke-dasharray: 26;
+    animation: drawcheck 0.4s var(--ease-out-soft) both;
+  }
+
+  /* Nội dung dưới màn hiện dần khi cuộn tới. `armed` do JavaScript gắn, nên
+     trang không có JavaScript vẫn thấy đủ nội dung. */
+  .reveal {
+    transition:
+      opacity 0.55s ease,
+      transform 0.55s var(--ease-out-soft);
+  }
+  .reveal.armed {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  .reveal.armed.in {
+    opacity: 1;
+    transform: none;
+  }
+  .swatch {
+    transition:
+      transform 0.16s var(--ease-out-soft),
+      box-shadow 0.16s ease;
+  }
+  .swatch:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: var(--shadow-md);
+  }
+  .demo {
+    transition:
+      box-shadow 0.16s ease,
+      transform 0.16s ease;
+  }
+  .demo:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Ẩn thanh cuộn của dải điều hướng ngang trên màn hẹp. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEYFRAMES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes pxblink {
+  0%,
+  93%,
+  100% {
+    opacity: 1;
+  }
+  95%,
+  97% {
+    opacity: 0;
+  }
+}
+@keyframes pxblinkc {
+  0%,
+  93%,
+  100% {
+    opacity: 0;
+  }
+  95%,
+  97% {
+    opacity: 1;
+  }
+}
+@keyframes pxtail {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(0.6px, -0.6px);
+  }
+  66% {
+    transform: translate(-0.6px, 0.6px);
+  }
+}
+@keyframes pxlook {
+  0%,
+  38% {
+    transform: translateX(0);
+  }
+  44%,
+  58% {
+    transform: translateX(-1px);
+  }
+  64%,
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.05);
+  }
+}
+@keyframes zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 2px);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(1px, -4px);
+  }
+}
+@keyframes pawstep {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+/* Vòng sóng lấy màu từ `--color-live` chứ không cài cứng rgba: bản thiết kế
+   cài cứng xanh lá, nên ở bảng xanh dương chấm xanh dương lại lan sóng xanh lá. */
+@keyframes ripple {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-live) 50%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-live) 0%, transparent);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes toastin {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dlgin {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes spinsq {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes drawcheck {
+  from {
+    stroke-dashoffset: 26;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Dòng lương trong bảng lọc sáng lên NGAY khi tích, trước khi bấm "Áp bộ lọc".
+   Để ngoài layer vì màu thanh là utility (`bg-accent-300`), mà utility thắng
+   mọi thứ trong `@layer components` bất kể độ đặc hiệu. */
+.fopt:has(input:checked) .bar-fill {
+  background: var(--color-accent);
+}
+.fopt:has(input:checked) .bar-label {
   font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.015em;
+}
+.fopt:has(input:checked) .bar-count {
+  font-weight: 800;
+  color: var(--color-accent-700);
 }
 
-/* Số xếp thành CỘT thì phải thẳng hàng — bảng, nhãn trục, dãy chỉ số.
-   Cố ý KHÔNG áp cho số cỡ lớn đứng một mình: chữ số rộng bằng nhau làm
-   "121" trông thưa thớt ở cỡ hero. */
+/* Số xếp thành CỘT phải thẳng hàng — bảng, dãy chỉ số. Cố ý KHÔNG áp cho số
+   cỡ lớn đứng một mình: chữ số rộng bằng nhau làm "121" trông thưa ở cỡ hero. */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
 
-/* Vòng focus dùng chung, để đi bằng bàn phím không bị lạc. Bo góc 0 cho khớp
-   hình khối của hệ — vòng focus bo tròn quanh một ô vuông trông như lỗi. */
-:where(a, button, input, select, summary):focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 0;
+/* ═══════════════════════════════════════════════════════════════════════════
+   CÔNG TẮC CHUYỂN ĐỘNG
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Hai đường tắt, và cả hai đều tắt SẠCH chứ không chỉ rút ngắn: người bật chế
+   độ giảm hiệu ứng thường là người thấy chóng mặt, một vệt quét 0,01 giây vẫn
+   là một vệt quét. */
+[data-motion='off'] *,
+[data-motion='off'] *::before,
+[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
-::selection {
-  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+/* Vạch quét đứng yên thì chỉ còn là một nét thừa ở góc trái — bỏ hẳn. */
+[data-motion='off'] .brand-field::before {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
+  }
+  .brand-field::before {
+    display: none;
   }
 }

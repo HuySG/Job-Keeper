@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+
 import { db } from '@/api/db';
 import {
   EXPIRY_TEXT_MARKERS,
@@ -9,6 +11,7 @@ import {
 import { HostAbortedError, PoliteFetcher, RobotsDisallowedError } from '@/crawler/fetcher';
 import { extractJobPostings } from '@/crawler/jsonld';
 import { applyFetchQuirks } from '@/crawler/sources/registry';
+import { SAVED_RECHECK_HOURS } from '@/constants/saved';
 import { CrawlTrigger, JobStatus, RunStatus, StatusReason } from '@/enums';
 import { compileField, matchJob } from '@/lib/field-match';
 
@@ -60,6 +63,50 @@ interface Outcome {
   /** validThrough mới đọc được — nguồn có thể GIA HẠN tin, không chỉ gỡ tin. */
   expiresAt?: Date | null;
   note: string;
+}
+
+/** Đúng những cột vòng kiểm cần — dùng chung cho tin thường và tin đã lưu. */
+const POSTING_SELECT = {
+  id: true,
+  url: true,
+  title: true,
+  descriptionText: true,
+  status: true,
+  expiresAt: true,
+  etag: true,
+  lastModifiedHdr: true,
+  missCount: true,
+  // `homeUrl` chỉ dùng để biết host nào phải đi bằng curl — xem applyFetchQuirks.
+  source: { select: { code: true, kind: true, config: true, homeUrl: true } },
+} satisfies Prisma.JobPostingSelect;
+
+/**
+ * Tin đã lưu, còn sống, chưa được gọi lại trong SAVED_RECHECK_HOURS giờ.
+ *
+ * Bảng `SavedJob` chưa có (mã mới đã lên mà chưa `db:push`) thì bỏ qua bước
+ * này thay vì làm đổ cả lượt kiểm — workflow chạy bốn lần một ngày, và lượt
+ * kiểm tin thường không được phép chết vì một tính năng phụ.
+ */
+async function loadSavedDue(now: Date, sourceCode: string | undefined) {
+  const before = new Date(now.getTime() - SAVED_RECHECK_HOURS * 60 * 60 * 1000);
+  try {
+    return await db.jobPosting.findMany({
+      where: {
+        status: { in: [JobStatus.OPEN, JobStatus.STALE] },
+        saved: { isNot: null },
+        OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: before } }],
+        ...(sourceCode ? { source: { code: sourceCode } } : {}),
+      },
+      select: POSTING_SELECT,
+      orderBy: { lastCheckedAt: { sort: 'asc', nulls: 'first' } },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      console.log('Bảng SavedJob chưa có — bỏ qua bước ưu tiên tin đã lưu (chạy npm run db:push).');
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function main(): Promise<void> {
@@ -126,19 +173,7 @@ async function main(): Promise<void> {
         : {}),
       ...valves,
     },
-    select: {
-      id: true,
-      url: true,
-      title: true,
-      descriptionText: true,
-      status: true,
-      expiresAt: true,
-      etag: true,
-      lastModifiedHdr: true,
-      missCount: true,
-      // `homeUrl` chỉ dùng để biết host nào phải đi bằng curl — xem applyFetchQuirks.
-      source: { select: { code: true, kind: true, config: true, homeUrl: true } },
-    },
+    select: POSTING_SELECT,
     // Tin chưa kiểm lần nào đi trước, rồi tới tin sắp hết hạn nhất. Khi ngân
     // sách không đủ cho tất cả thì đây là thứ tự đáng tiêu tiền nhất.
     orderBy: [{ lastCheckedAt: { sort: 'asc', nulls: 'first' } }, { expiresAt: 'asc' }],
@@ -149,13 +184,29 @@ async function main(): Promise<void> {
     ? compileField({ keywords: filter.keywords, excludes: filter.excludes })
     : null;
 
-  const queue = field
-    ? candidates.filter(
-        (posting) =>
-          matchJob(field, { title: posting.title, description: posting.descriptionText })
-            .verdict !== 'reject',
-      )
-    : candidates;
+  // ── Tin đã lưu đi TRƯỚC ────────────────────────────────────────────────────
+  //
+  // Trang "Tin đã lưu" hứa kiểm mỗi tin đã lưu mỗi ngày, ưu tiên hơn tin thường.
+  // Nên chúng bỏ qua ba cái van và cả bộ lọc ngành: người dùng đã tự chọn,
+  // không cần từ điển xác nhận lại. Trần SAVED_JOB_LIMIT giữ phần này ở mức vài
+  // chục request một ngày.
+  const savedDue = await loadSavedDue(now, sourceCode);
+  const savedIds = new Set(savedDue.map((posting) => posting.id));
+
+  const fieldQueue = (
+    field
+      ? candidates.filter(
+          (posting) =>
+            matchJob(field, { title: posting.title, description: posting.descriptionText })
+              .verdict !== 'reject',
+        )
+      : candidates
+  ).filter((posting) => !savedIds.has(posting.id));
+
+  const queue = [...savedDue, ...fieldQueue].slice(0, limit);
+  if (savedDue.length > 0) {
+    console.log(`Ưu tiên ${savedDue.length} tin đã lưu quá ${SAVED_RECHECK_HOURS} giờ chưa kiểm.`);
+  }
 
   console.log(
     `Tầng 3–4: ${queue.length} tin cần gọi HTTP` +

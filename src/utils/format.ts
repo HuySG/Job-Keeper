@@ -40,6 +40,23 @@ export function timeAgo(date: Date | string | null): string {
   return `${months} tháng trước`;
 }
 
+/**
+ * Tuổi gọn cho cột hẹp: "hôm nay", "hôm qua", "3 ngày", "2 tháng".
+ *
+ * Tính theo NGÀY LỊCH giờ Việt Nam chứ không theo 24 giờ trôi: tin đăng 23 giờ
+ * đêm qua đọc lúc 7 giờ sáng nay là "hôm qua", dù mới cách tám tiếng.
+ */
+export function shortAge(date: Date | null): string {
+  if (!date) return '—';
+  const day = (value: Date) =>
+    Math.floor((value.getTime() + 7 * 60 * 60 * 1000) / (24 * 60 * 60 * 1000));
+  const days = day(new Date()) - day(date);
+  if (days <= 0) return 'hôm nay';
+  if (days === 1) return 'hôm qua';
+  if (days < 30) return `${days} ngày`;
+  return `${Math.floor(days / 30)} tháng`;
+}
+
 /** Còn bao lâu tới hạn nộp. null nếu nguồn không khai. */
 export function daysLeft(expiresAt: Date | null): number | null {
   if (!expiresAt) return null;

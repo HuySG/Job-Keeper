@@ -63,40 +63,47 @@ npm run crawl -- --source vnw --limit 200
 npm run dev        # http://localhost:3000
 ```
 
-Bốn màn hình, mỗi màn hình trả lời **đúng một câu hỏi**. Đó là phép thử để nó
-không phình ra: thêm một trang mà không viết nổi câu hỏi nó trả lời, hoặc câu
-hỏi trùng với trang đã có, thì đó là một khối trong trang cũ chứ không phải một
-trang mới.
+Năm màn hình chính, mỗi màn hình trả lời **đúng một câu hỏi**. Đó là phép thử
+để nó không phình ra: thêm một trang mà không viết nổi câu hỏi nó trả lời, hoặc
+câu hỏi trùng với trang đã có, thì đó là một khối trong trang cũ chứ không phải
+một trang mới.
 
 | Đường dẫn | Trả lời câu |
 |---|---|
 | `/` **Tổng quan** | Kho tin đang có gì, và có đáng tin không? |
+| `/nganh` **Ngành của tôi** | Tin nào đúng ngành tôi nhắm, và có còn tuyển không? |
 | `/viec` **Kho tin** | Tin nào khớp với thứ tôi đang tìm? |
-| `/luong` **Lương** | Mức nào là phổ biến, và bao nhiêu tin dám ghi số? |
+| `/luong` **Lương** | Ngành tôi trả bao nhiêu, và bao nhiêu tin dám ghi số? |
 | `/nguon` **Nguồn & vận hành** | Crawler còn sống không, nguồn nào đang hỏng? |
 
-Vì sao trang chủ **không** phải là danh sách việc làm: cào job về rồi hiển thị
-lại danh sách thì TopCV làm tốt hơn và có sẵn nút ứng tuyển. Thứ đáng đặt lên
-trước là thứ **không sàn đơn lẻ nào tính được** — tỷ lệ tin dám ghi lương,
-khoảng lương theo cấp bậc gom từ nhiều sàn, và tình trạng sống chết của chính
-kho tin ([PLAN.md §1](PLAN.md)).
+Ba trang phụ nằm ở nút bên phải thanh điều hướng: `/da-luu` **Tin đã lưu**,
+`/cai-dat` **Cài đặt** (từ điển ngành, bảng màu, chuyển động) và
+`/thanh-phan` **Bộ thành phần** — tài liệu sống của hệ giao diện.
+
+Giao diện dựng theo bản thiết kế **Bae-Job v2** (Claude Design): hệ Modernist —
+góc vuông, vạch 2px, Archivo 800 — nhuộm xanh lá pastel, có bảng màu xanh dương
+thứ hai, và linh vật Mèo Bae bằng điểm ảnh. Token và lớp thành phần nằm ở
+[src/styles/globals.css](src/styles/globals.css).
 
 ### Ba ràng buộc kỹ thuật của phần web
 
-**1. Chỉ đọc.** Không có đường nào từ lượt truy cập của người dùng đi ra sàn
-nguồn. Mọi thứ ghi vào CSDL đều đi qua crawler, nên trang vẫn chạy bình thường
-kể cả khi cả bốn nguồn cùng sập.
+**1. Gần như chỉ đọc.** Không có đường nào từ lượt truy cập của người dùng đi ra
+sàn nguồn, nên trang vẫn chạy bình thường kể cả khi mọi nguồn cùng sập. Web chỉ
+GHI đúng hai thứ — tin đã lưu (bảng `SavedJob`) và từ điển ngành (`SavedFilter`)
+— và cả hai đi qua cổng khoá `EDIT_KEY`
+([src/lib/edit-access.ts](src/lib/edit-access.ts)). Chưa đặt khoá thì bản
+production chỉ đọc. Từ điển được sửa trên **bản nháp nằm trong URL**, xem trước
+số tin khớp, rồi mới lưu ([src/lib/field-draft.ts](src/lib/field-draft.ts)).
 
-**2. Gần như không có JavaScript.** Mỗi trang chỉ nặng thêm **142 B** JS của
-riêng nó — toàn bộ biểu đồ, bộ lọc, sắp xếp và phân trang đều dựng sẵn trên máy
-chủ. Bộ lọc là `<form method="get">` thuần, nên mỗi trạng thái màn hình là một
-URL dán được và đánh dấu trang được. Component phía trình duyệt duy nhất là
-danh sách điều hướng, vì "tôi đang ở trang nào" thì không thể chờ JS tải xong.
+**2. Gần như không có JavaScript.** Bộ lọc là `<form method="get">` thuần, lưu tin
+và lưu từ điển là server action gắn vào `<form>` — mọi thứ chạy được khi JS chưa
+tải, và mỗi trạng thái màn hình là một URL dán được. Component phía trình duyệt
+chỉ có hai chỗ: thanh điều hướng (vì "tôi đang ở trang nào" không thể chờ JS) và
+trang Bộ thành phần (vì tab, công tắc, hộp thoại chính là thứ đang trình diễn).
 
-**3. Biểu đồ tự vẽ, không thư viện.** Thêm một thư viện biểu đồ là kéo theo hàng
-trăm KB JS cho vài chục hình chữ nhật, và đánh mất ràng buộc số 2. Phần hình học
-nằm ở [src/lib/chart.ts](src/lib/chart.ts), phần vẽ ở
-[src/components/charts](src/components/charts/).
+**3. Biểu đồ tự vẽ, không thư viện.** Mọi phân bố trong bản v2 là thanh ngang
+nhãn · rãnh · số ([src/components/ui/bar-row.tsx](src/components/ui/bar-row.tsx)).
+Thêm một thư viện biểu đồ cho vài chục hình chữ nhật là đánh mất ràng buộc số 2.
 
 ### Nói thật, không làm đẹp số
 

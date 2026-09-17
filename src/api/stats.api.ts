@@ -55,7 +55,14 @@ export interface Overview {
   withSalary: number;
   companies: number;
   activeSources: number;
+  /**
+   * Sàn đang bật VÀ đang có ít nhất một tin còn sống. Chênh lệch với
+   * `activeSources` là số sàn bật mà không trả về gì — thứ đáng lo nhất.
+   */
+  sourcesWithAlive: number;
   postedToday: number;
+  /** Tin đăng trong 24 giờ trượt — khác `postedToday` (tính từ nửa đêm). */
+  postedLast24h: number;
   postedLast7: number;
   /** Bảy ngày TRƯỚC đó — chỉ có so với kỳ liền trước thì con số mới có nghĩa. */
   postedPrev7: number;
@@ -83,7 +90,9 @@ export const getOverview = cache(async (): Promise<Overview> => {
     withSalary,
     companies,
     activeSources,
+    aliveBySource,
     postedToday,
+    postedLast24h,
     postedLast7,
     postedPrev7,
     newest,
@@ -93,7 +102,13 @@ export const getOverview = cache(async (): Promise<Overview> => {
     db.jobPosting.count({ where: { ...aliveWhere, salaryIsPublic: true } }),
     db.company.count(),
     db.source.count({ where: { isActive: true } }),
+    db.jobPosting.groupBy({
+      by: ['sourceId'],
+      where: { ...aliveWhere, source: { isActive: true } },
+      _count: true,
+    }),
     db.jobPosting.count({ where: { postedAt: { gte: startOfToday } } }),
+    db.jobPosting.count({ where: { ...aliveWhere, postedAt: { gte: new Date(now - day) } } }),
     db.jobPosting.count({ where: { postedAt: { gte: new Date(now - 7 * day) } } }),
     db.jobPosting.count({
       where: { postedAt: { gte: new Date(now - 14 * day), lt: new Date(now - 7 * day) } },
@@ -110,7 +125,9 @@ export const getOverview = cache(async (): Promise<Overview> => {
     withSalary,
     companies,
     activeSources,
+    sourcesWithAlive: aliveBySource.length,
     postedToday,
+    postedLast24h,
     postedLast7,
     postedPrev7,
     lastCrawledAt: newest?.crawledAt ?? null,

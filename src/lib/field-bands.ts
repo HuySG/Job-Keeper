@@ -28,21 +28,25 @@ export const FACET_NONE = '__none';
 export const EXPERIENCE_BANDS: readonly {
   value: string;
   label: string;
+  /** Nhãn gọn cho nhãn bấm được và dòng biểu đồ, nơi bề ngang tính bằng chữ. */
+  short: string;
   hint: string;
   test: (years: number | null) => boolean;
 }[] = [
   {
     value: '0',
     label: 'Không đòi kinh nghiệm',
+    short: 'Không đòi KN',
     hint: 'Tin nói rõ không cần kinh nghiệm — hợp với người mới ra trường',
     test: (y) => y !== null && y < 1,
   },
-  { value: '1-2', label: '1–2 năm', hint: 'Đòi tối thiểu 1 đến 2 năm', test: (y) => y !== null && y >= 1 && y <= 2 },
-  { value: '3-5', label: '3–5 năm', hint: 'Đòi tối thiểu 3 đến 5 năm', test: (y) => y !== null && y >= 3 && y <= 5 },
-  { value: '5+', label: 'Trên 5 năm', hint: 'Đòi tối thiểu hơn 5 năm — thường là cấp quản lý', test: (y) => y !== null && y > 5 },
+  { value: '1-2', label: '1–2 năm', short: '1–2 năm', hint: 'Đòi tối thiểu 1 đến 2 năm', test: (y) => y !== null && y >= 1 && y <= 2 },
+  { value: '3-5', label: '3–5 năm', short: '3–5 năm', hint: 'Đòi tối thiểu 3 đến 5 năm', test: (y) => y !== null && y >= 3 && y <= 5 },
+  { value: '5+', label: 'Trên 5 năm', short: 'Trên 5 năm', hint: 'Đòi tối thiểu hơn 5 năm — thường là cấp quản lý', test: (y) => y !== null && y > 5 },
   {
     value: FACET_NONE,
     label: 'Tin không ghi',
+    short: 'Không ghi',
     hint: 'Nhà tuyển dụng không nói số năm. KHÔNG có nghĩa là không cần kinh nghiệm.',
     test: (y) => y === null,
   },
@@ -60,16 +64,18 @@ export const EXPERIENCE_BANDS: readonly {
 export const SALARY_BANDS: readonly {
   value: string;
   label: string;
+  short: string;
   hint: string;
   test: (best: number | null) => boolean;
 }[] = [
-  { value: '0-15', label: 'Dưới 15 triệu', hint: 'Tin có ghi số, dưới 15 triệu/tháng', test: (v) => v !== null && v < 15_000_000 },
-  { value: '15-25', label: '15 – 25 triệu', hint: '', test: (v) => v !== null && v >= 15_000_000 && v < 25_000_000 },
-  { value: '25-40', label: '25 – 40 triệu', hint: '', test: (v) => v !== null && v >= 25_000_000 && v < 40_000_000 },
-  { value: '40+', label: 'Trên 40 triệu', hint: '', test: (v) => v !== null && v >= 40_000_000 },
+  { value: '0-15', label: 'Dưới 15 triệu', short: 'Dưới 15 tr', hint: 'Tin có ghi số, dưới 15 triệu/tháng', test: (v) => v !== null && v < 15_000_000 },
+  { value: '15-25', label: '15 – 25 triệu', short: '15 – 25 tr', hint: '', test: (v) => v !== null && v >= 15_000_000 && v < 25_000_000 },
+  { value: '25-40', label: '25 – 40 triệu', short: '25 – 40 tr', hint: '', test: (v) => v !== null && v >= 25_000_000 && v < 40_000_000 },
+  { value: '40+', label: 'Trên 40 triệu', short: 'Trên 40 tr', hint: '', test: (v) => v !== null && v >= 40_000_000 },
   {
     value: FACET_NONE,
     label: 'Thoả thuận',
+    short: 'Thoả thuận',
     hint: 'Tin không ghi số. Chiếm phần lớn thị trường — bỏ ô này là bỏ phần lớn cơ hội.',
     test: (v) => v === null,
   },

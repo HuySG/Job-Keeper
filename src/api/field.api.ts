@@ -1,7 +1,10 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { db } from '@/api/db';
 import { LIST_INCLUDE, PAGE_SIZE, type JobListItem } from '@/api/job.api';
+import { FRESH_CHECK_HOURS } from '@/constants/field';
 import { JobStatus, SaturdayWork } from '@/enums';
 import {
   EXPERIENCE_BANDS,
@@ -11,7 +14,13 @@ import {
   salaryBandOf,
   salaryValue,
 } from '@/lib/field-bands';
-import { compileField, isNarrowHcm, matchJob, type MatchResult } from '@/lib/field-match';
+import {
+  compileField,
+  isNarrowHcm,
+  matchJob,
+  type CompiledField,
+  type MatchResult,
+} from '@/lib/field-match';
 import { classifyPurchase, type PurchaseTypeResult } from '@/lib/purchase-type';
 import { toMatchKey } from '@/crawler/normalize/text';
 
@@ -40,8 +49,8 @@ export { EXPERIENCE_BANDS, FACET_NONE, SALARY_BANDS, salaryValue } from '@/lib/f
 /** Tin còn sống — cùng định nghĩa với `job.api.ts`, cố ý lặp lại để đọc là thấy. */
 const ALIVE: string[] = [JobStatus.OPEN, JobStatus.STALE];
 
-/** Coi là "vừa kiểm" nếu đã gọi HTTP/API vào tin trong ngần này giờ. */
-export const FRESH_CHECK_HOURS = 48;
+// Ngưỡng "vừa kiểm" nay nằm ở `constants/field` để giao diện dùng chung.
+export { FRESH_CHECK_HOURS };
 
 export interface FieldMatchedJob {
   job: JobListItem;
@@ -53,6 +62,8 @@ export interface FieldMatchedJob {
 export interface Facet {
   value: string;
   label: string;
+  /** Nhãn gọn, nếu bảng khoảng có khai — xem `EXPERIENCE_BANDS.short`. */
+  short?: string;
   count: number;
   hint?: string;
 }
@@ -87,6 +98,11 @@ export interface FieldPage {
   inFieldTotal: number;
   strong: number;
   weak: number;
+  /**
+   * Tin khớp yếu bị ẩn vì chưa bật "Kể cả tin khớp yếu". Luôn đếm — kể cả khi
+   * đang ẩn — để giao diện nói được "còn 23 tin khớp yếu nếu bạn muốn soi".
+   */
+  weakHidden: number;
   /** Số tin đã chấm để ra được từng ấy — mẫu số của "lọt qua từ điển". */
   scanned: number;
   /**
@@ -126,10 +142,28 @@ export interface FieldPage {
   stats: {
     /** VND/tháng, trung vị trên số tin CÓ ghi lương. `null` khi chưa tin nào ghi. */
     salaryMedian: number | null;
+    /**
+     * Số tin có CON SỐ lương dùng được — cùng luật với ô "Thoả thuận" của bảng
+     * lọc, nên `salaryCount` + số tin trong ô đó luôn bằng `total`.
+     */
     salaryCount: number;
     topCompanies: Facet[];
     sources: Facet[];
     levels: Facet[];
+    /** Tin đăng trong 24 giờ qua, trong tập đang xem. */
+    postedLast24h: number;
+    /**
+     * Trung vị lương theo từng khoảng kinh nghiệm (trừ ô "không ghi").
+     * `count` là số tin của khoảng, `sample` là số tin trong đó CÓ ghi số —
+     * trung vị chỉ tính trên `sample`, nên giao diện phải nói cả hai.
+     */
+    salaryByExperience: {
+      value: string;
+      label: string;
+      count: number;
+      sample: number;
+      median: number | null;
+    }[];
   };
 
   /**
@@ -150,11 +184,18 @@ export interface FieldPage {
 
   page: number;
   pageCount: number;
+  /** Lần sửa từ điển gần nhất — `null` khi đang chấm một bản nháp chưa lưu. */
+  updatedAt: Date | null;
 }
-
 
 export interface FieldQuery {
   page?: number;
+  /**
+   * `true` = `items` gồm MỌI tin từ trang 1 tới trang `page`, không chỉ trang
+   * `page`. Đây là "Xem thêm 20 tin" của trang Ngành: bấm là danh sách dài
+   * thêm tại chỗ, không phải nhảy sang một trang mới rồi mất dấu tin vừa đọc.
+   */
+  cumulative?: boolean;
   /** false = chỉ hiện tin "nhận chắc" (từ nhận nằm ở TIÊU ĐỀ). */
   includeWeak?: boolean;
   /** true = bỏ tin ở Bình Dương / Bà Rịa – Vũng Tàu (phần sáp nhập 2025). */
@@ -193,46 +234,126 @@ export interface FieldQuery {
   salary?: readonly string[];
 }
 
+/**
+ * Định nghĩa một ngành — đúng những cột của `SavedFilter` mà việc chấm điểm cần.
+ *
+ * Tách khỏi dòng CSDL vì trang Cài đặt phải chấm được một từ điển CHƯA LƯU (bản
+ * nháp trong URL) bằng đúng bộ luật chấm từ điển đã lưu. Hai đường chấm riêng là
+ * hai con số lệch nhau, và "xem trước 318 tin" thành lời nói dối.
+ */
+export interface FieldDefinition {
+  slug: string;
+  name: string;
+  keywords: readonly string[];
+  excludes: readonly string[];
+  provinces: readonly string[];
+  levels: readonly string[];
+  maxAgeDays: number | null;
+  updatedAt: Date | null;
+}
+
+/**
+ * Bọc `cache()`: một lượt tải trang Kho tin hay Chi tiết hỏi định nghĩa ngành
+ * hai, ba lần (khung ngoài, bảng tin, tin tương tự).
+ */
+export const getFieldDefinition = cache(async (slug: string): Promise<FieldDefinition | null> => {
+  const row = await db.savedFilter.findUnique({ where: { slug } });
+  if (!row) return null;
+  return {
+    slug: row.slug,
+    name: row.name,
+    keywords: row.keywords,
+    excludes: row.excludes,
+    provinces: row.provinces,
+    levels: row.levels,
+    maxAgeDays: row.maxAgeDays,
+    updatedAt: row.updatedAt,
+  };
+});
+
+/**
+ * Tin còn sống trong PHẠM VI của một ngành (tỉnh, cấp bậc, tuổi tin).
+ *
+ * Khoá cache là một chuỗi chứ không phải object: `cache()` so tham số bằng
+ * danh tính, nên hai object cùng nội dung vẫn là hai lần truy vấn. Trang Cài
+ * đặt chấm bản đã lưu, bản nháp VÀ dựng báo cáo từng từ — cùng một phạm vi thì
+ * chỉ đọc CSDL một lần.
+ */
+const loadCandidates = cache(async (scopeKey: string) => {
+  const scope = JSON.parse(scopeKey) as {
+    provinces: string[];
+    levels: string[];
+    maxAgeDays: number | null;
+  };
+  const since = scope.maxAgeDays
+    ? new Date(Date.now() - scope.maxAgeDays * 24 * 60 * 60 * 1000)
+    : null;
+
+  return db.jobPosting.findMany({
+    where: {
+      status: { in: ALIVE },
+      ...(scope.provinces.length
+        ? { locations: { some: { location: { slug: { in: scope.provinces } } } } }
+        : {}),
+      ...(since ? { postedAt: { gte: since } } : {}),
+      ...(scope.levels.length ? { level: { in: scope.levels } } : {}),
+    },
+    orderBy: { postedAt: 'desc' },
+    include: LIST_INCLUDE,
+  });
+});
+
+function candidatesFor(definition: FieldDefinition) {
+  return loadCandidates(
+    JSON.stringify({
+      provinces: [...definition.provinces].sort(),
+      levels: [...definition.levels].sort(),
+      maxAgeDays: definition.maxAgeDays,
+    }),
+  );
+}
+
+/**
+ * Tên đọc được của các slug tỉnh/thành, giữ đúng thứ tự truyền vào.
+ *
+ * Slug nào chưa có trong bảng Location thì giữ nguyên slug — thà hiện một
+ * chuỗi xấu còn hơn nuốt mất cả tỉnh khỏi dòng "phạm vi".
+ */
+export async function getProvinceNames(slugs: readonly string[]): Promise<string[]> {
+  if (slugs.length === 0) return [];
+  const rows = await db.location.findMany({
+    where: { slug: { in: [...slugs] } },
+    select: { slug: true, name: true },
+  });
+  const byslug = new Map(rows.map((row) => [row.slug, row.name]));
+  return slugs.map((slug) => byslug.get(slug) ?? slug);
+}
+
 export async function findFieldJobs(
   slug: string,
   query: FieldQuery = {},
 ): Promise<FieldPage | null> {
-  const filter = await db.savedFilter.findUnique({ where: { slug } });
-  if (!filter) return null;
+  const definition = await getFieldDefinition(slug);
+  return definition ? scoreField(definition, query) : null;
+}
 
-  const since = filter.maxAgeDays
-    ? new Date(Date.now() - filter.maxAgeDays * 24 * 60 * 60 * 1000)
-    : null;
-
-  const [candidates, provinceRows] = await Promise.all([
-    db.jobPosting.findMany({
-      where: {
-        status: { in: ALIVE },
-        ...(filter.provinces.length
-          ? { locations: { some: { location: { slug: { in: filter.provinces } } } } }
-          : {}),
-        ...(since ? { postedAt: { gte: since } } : {}),
-        ...(filter.levels.length ? { level: { in: filter.levels } } : {}),
-      },
-      orderBy: { postedAt: 'desc' },
-      include: LIST_INCLUDE,
-    }),
-    db.location.findMany({
-      where: { slug: { in: filter.provinces } },
-      select: { slug: true, name: true },
-    }),
+/** Chấm một định nghĩa ngành bất kỳ — đã lưu hay còn là bản nháp. */
+export async function scoreField(
+  definition: FieldDefinition,
+  query: FieldQuery = {},
+): Promise<FieldPage> {
+  const [candidates, provinceNames] = await Promise.all([
+    candidatesFor(definition),
+    getProvinceNames(definition.provinces),
   ]);
 
-  // Slug nào chưa có trong bảng Location thì giữ nguyên slug — thà hiện một
-  // chuỗi xấu còn hơn nuốt mất cả tỉnh khỏi dòng "phạm vi".
-  const provinceName = new Map(provinceRows.map((row) => [row.slug, row.name]));
-
-  const field = compileField({ keywords: filter.keywords, excludes: filter.excludes });
+  const field = compileField({ keywords: definition.keywords, excludes: definition.excludes });
 
   // ── Bước 1: vào ngành hay không ────────────────────────────────────────────
   const inField: FieldMatchedJob[] = [];
   let droppedByNarrowHcm = 0;
   let dictionaryAccepted = 0;
+  let weakHidden = 0;
 
   // Chuẩn hoá MỘT LẦN ngoài vòng lặp: `toMatchKey` chạy regex, và vòng này
   // quay vài nghìn lượt mỗi lần tải trang.
@@ -252,8 +373,11 @@ export async function findFieldJobs(
     // hay gõ vào ô tìm kiếm. Xem `dictionaryAccepted` ở `FieldPage`.
     dictionaryAccepted += 1;
 
-    if (match.verdict === 'weak' && !query.includeWeak) continue;
     if (needle && !hitsText(job, needle)) continue;
+    if (match.verdict === 'weak' && !query.includeWeak) {
+      weakHidden += 1;
+      continue;
+    }
 
     inField.push({ job, match, purchase: classifyPurchase(job) });
   }
@@ -334,26 +458,39 @@ export async function findFieldJobs(
   // không phải trung vị của cả ngành. Giao diện ghi rõ mẫu số để khỏi nhầm.
   const stats = {
     salaryMedian: median(matched.map((r) => salaryValue(r.job)).filter((v): v is number => v !== null)),
-    salaryCount: matched.filter((r) => r.job.salaryIsPublic).length,
+    salaryCount: matched.filter((r) => salaryValue(r.job) !== null).length,
     topCompanies: countBy(matched, (r) => [r.job.company.name, r.job.company.name]).slice(0, 8),
     sources: countBy(matched, (r) => [r.job.source.name, r.job.source.name]),
     levels: countBy(matched, (r) => (r.job.level ? [r.job.level, LEVEL_LABELS[r.job.level] ?? r.job.level] : [FACET_NONE, 'Không ghi cấp bậc'])),
+    postedLast24h: matched.filter((r) => r.job.postedAt.getTime() >= Date.now() - 24 * 60 * 60 * 1000).length,
+    salaryByExperience: EXPERIENCE_BANDS.filter((band) => band.value !== FACET_NONE).map((band) => {
+      const rows = matched.filter((r) => experienceBandOf(r.job.yearsExpMin) === band.value);
+      const values = rows.map((r) => salaryValue(r.job)).filter((v): v is number => v !== null);
+      return {
+        value: band.value,
+        label: band.short,
+        count: rows.length,
+        sample: values.length,
+        median: median(values),
+      };
+    }),
   };
 
   return {
-    slug: filter.slug,
-    name: filter.name,
-    keywordCount: filter.keywords.length,
-    excludeCount: filter.excludes.length,
-    provinces: filter.provinces,
-    provinceNames: filter.provinces.map((slug) => provinceName.get(slug) ?? slug),
-    maxAgeDays: filter.maxAgeDays,
+    slug: definition.slug,
+    name: definition.name,
+    keywordCount: definition.keywords.length,
+    excludeCount: definition.excludes.length,
+    provinces: [...definition.provinces],
+    provinceNames,
+    maxAgeDays: definition.maxAgeDays,
 
-    items: matched.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    items: matched.slice(query.cumulative ? 0 : (page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     total,
     inFieldTotal: inField.length,
     strong,
     weak: total - strong,
+    weakHidden,
     scanned: candidates.length,
     dictionaryAccepted,
     freshlyChecked,
@@ -365,6 +502,7 @@ export async function findFieldJobs(
 
     page,
     pageCount,
+    updatedAt: definition.updatedAt,
   };
 }
 
@@ -502,7 +640,7 @@ const SATURDAY_LABELS: Record<string, string> = {
 /** Đếm theo một bảng khoảng cố định — giữ nguyên THỨ TỰ khai báo, kể cả ô 0 tin. */
 function countBands(
   rows: FieldMatchedJob[],
-  bands: readonly { value: string; label: string; hint: string }[],
+  bands: readonly { value: string; label: string; short: string; hint: string }[],
   bandOf: (row: FieldMatchedJob) => string,
 ): Facet[] {
   const counts = new Map<string, number>();
@@ -515,6 +653,7 @@ function countBands(
   return bands.map((band) => ({
     value: band.value,
     label: band.label,
+    short: band.short,
     count: counts.get(band.value) ?? 0,
     ...(band.hint ? { hint: band.hint } : {}),
   }));
@@ -542,4 +681,138 @@ export async function listFields(): Promise<{ slug: string; name: string }[]> {
     select: { slug: true, name: true },
     orderBy: { slug: 'asc' },
   });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DÙNG CHUNG CHO CÁC TRANG KHÁC
+   ───────────────────────────────────────────────────────────────────────────*/
+
+/** Một tin nằm ở đâu so với ngành: có trong phạm vi không, và từ điển nói gì. */
+export interface FieldVerdict {
+  /** Trong tỉnh, cấp bậc và tuổi tin của ngành. */
+  inScope: boolean;
+  match: MatchResult;
+  /**
+   * Tin này có hiện ở danh sách "Ngành của tôi" MẶC ĐỊNH không — tức trong
+   * phạm vi VÀ khớp chắc. Đây là nghĩa của ô vuông đầu dòng ở Kho tin; tin khớp
+   * yếu không được đánh dấu vì mặc định trang Ngành đang ẩn chúng.
+   */
+  listed: boolean;
+}
+
+type ScopedJob = Pick<JobListItem, 'title' | 'descriptionText' | 'postedAt' | 'level'> & {
+  locations: { location: { slug: string } }[];
+};
+
+/**
+ * Bộ chấm dựng một lần, dùng cho cả trang Kho tin (20 dòng) lẫn Chi tiết.
+ *
+ * Cùng `compileField` + `matchJob` với trang Ngành — ô vuông "đúng ngành" ở Kho
+ * tin mà dùng một luật khác thì hai trang cãi nhau về cùng một tin.
+ */
+export function fieldJudge(definition: FieldDefinition): (job: ScopedJob) => FieldVerdict {
+  const field: CompiledField = compileField({
+    keywords: definition.keywords,
+    excludes: definition.excludes,
+  });
+  const since = definition.maxAgeDays
+    ? Date.now() - definition.maxAgeDays * 24 * 60 * 60 * 1000
+    : null;
+
+  return (job) => {
+    const inScope =
+      (definition.provinces.length === 0 ||
+        job.locations.some((entry) => definition.provinces.includes(entry.location.slug))) &&
+      (definition.levels.length === 0 || (job.level !== null && definition.levels.includes(job.level))) &&
+      (since === null || job.postedAt.getTime() >= since);
+    const match = matchJob(field, { title: job.title, description: job.descriptionText });
+    return { inScope, match, listed: inScope && match.verdict === 'strong' };
+  };
+}
+
+export interface TermCount {
+  label: string;
+  count: number;
+}
+
+/**
+ * Mỗi từ trong từ điển đang kéo về bao nhiêu tin — số trên từng nhãn ở trang
+ * Cài đặt.
+ *
+ * Ba con số, ba câu hỏi khác nhau, nên đếm theo ba luật khác nhau:
+ *
+ *   · từ CHẮC — bao nhiêu tin (không bị loại) có từ này ở TIÊU ĐỀ. Gỡ từ này
+ *     thì những tin chỉ nhờ nó mới vào sẽ rơi ra; con số là trần của mất mát.
+ *   · từ XÁM  — bao nhiêu tin SẼ VÀO THÊM nếu nâng từ này lên chắc: tiêu đề có
+ *     từ xám, không có từ chắc nào, không bị loại. Tin đã vào nhờ từ chắc
+ *     không tính, vì nâng lên cũng chẳng đổi gì với chúng.
+ *   · từ LOẠI — bao nhiêu tin đang bị CHÍNH từ này chặn mà nếu không chặn thì
+ *     từ điển đã nhận (chắc hoặc yếu). Tin vốn không khớp gì thì chặn hay không
+ *     cũng vậy, đếm vào là thổi phồng công của từ loại.
+ *
+ * Một tin bị nhiều từ loại cùng chặn thì chỉ tính cho từ ĐẦU TIÊN — đúng như
+ * `matchJob` báo `rejectedBy`. Nhờ vậy tổng các nhãn bằng đúng số tin bị loại.
+ */
+export interface DictionaryReport {
+  strong: TermCount[];
+  gray: TermCount[];
+  /** Số tin khác nhau sẽ vào thêm nếu nâng TẤT CẢ từ xám. */
+  grayReach: number;
+  excludes: TermCount[];
+  /** Số tin khác nhau đang bị từ loại chặn. */
+  excludedTotal: number;
+  scanned: number;
+}
+
+export async function dictionaryReport(definition: FieldDefinition): Promise<DictionaryReport> {
+  const candidates = await candidatesFor(definition);
+  const field = compileField({ keywords: definition.keywords, excludes: definition.excludes });
+
+  const strong = new Map(field.strong.map((term) => [term.label, 0]));
+  const gray = new Map(field.gray.map((term) => [term.label, 0]));
+  const excludes = new Map(field.excludes.map((term) => [term.label, 0]));
+  let grayReach = 0;
+  let excludedTotal = 0;
+
+  const bump = (map: Map<string, number>, label: string) => map.set(label, (map.get(label) ?? 0) + 1);
+
+  for (const job of candidates) {
+    const titleKey = toMatchKey(job.title);
+    const strongHits = field.strong.filter((term) => term.re.test(titleKey));
+    const blocker = field.excludes.find((term) => term.re.test(titleKey));
+
+    if (blocker) {
+      let wouldAccept = strongHits.length > 0;
+      if (!wouldAccept && job.descriptionText) {
+        // Chỉ chuẩn hoá mô tả khi thật cần — mô tả dài tới 8 KB mỗi tin.
+        const descKey = toMatchKey(job.descriptionText);
+        wouldAccept = field.strong.filter((term) => term.re.test(descKey)).length >= 2;
+      }
+      if (wouldAccept) {
+        bump(excludes, blocker.label);
+        excludedTotal += 1;
+      }
+      continue;
+    }
+
+    for (const term of strongHits) bump(strong, term.label);
+
+    if (strongHits.length === 0) {
+      const grayHits = field.gray.filter((term) => term.re.test(titleKey));
+      for (const term of grayHits) bump(gray, term.label);
+      if (grayHits.length > 0) grayReach += 1;
+    }
+  }
+
+  const list = (map: Map<string, number>): TermCount[] =>
+    [...map].map(([label, count]) => ({ label, count }));
+
+  return {
+    strong: list(strong),
+    gray: list(gray),
+    grayReach,
+    excludes: list(excludes),
+    excludedTotal,
+    scanned: candidates.length,
+  };
 }

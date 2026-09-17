@@ -1,103 +1,176 @@
 import type { ReactNode } from 'react';
 
-import type { Tone } from '@/utils/format';
-
-import { TONE, cx } from './tone';
+import { Glyph, type GlyphName } from './glyph';
+import { cx } from './tone';
 
 /**
- * Ô chỉ số — dạng đúng cho MỘT con số hiện tại.
+ * Dải chỉ số — một hàng ô số liệu ngăn nhau bằng vạch mảnh, KHÔNG có khoảng
+ * cách giữa các ô: đây là một cụm số liệu, không phải bốn thẻ rời.
  *
- * Một con số thì không vẽ biểu đồ một cột. Hợp đồng của ô này cố định:
- *
- *   nhãn (viết thường, không có dấu hai chấm cuối)
- *   giá trị (đậm, cỡ lớn)
- *   phần phụ (đơn vị, mẫu đã tính, hoặc so với kỳ trước)
- *
- * Cố ý KHÔNG dùng `tabular-nums` cho giá trị: chữ số rộng bằng nhau làm số
- * "121" trông rời rạc ở cỡ lớn. Số xếp thành cột trong bảng thì mới cần.
+ * Hai nền:
+ *   · `brand` — nằm trong dải hero pastel, vạch trên 2px `accent-700`, chữ nhãn
+ *     `accent-800` (chữ `accent` đặt trên pastel không đủ tương phản).
+ *   · `plain` — nằm trên nền kem, vạch dưới 2px mực như mọi phân đoạn khác.
  */
-
-export function Stat({
-  label,
-  value,
-  sub,
+export function StatStrip({
   tone,
-  hint,
-  href,
+  className,
+  children,
 }: {
-  label: string;
-  value: ReactNode;
-  sub?: ReactNode;
-  /** Tô màu giá trị. Chỉ dùng khi con số TỰ NÓ mang trạng thái tốt/xấu. */
-  tone?: Tone;
-  hint?: string;
-  href?: string;
+  tone: 'brand' | 'plain';
+  className?: string;
+  children: ReactNode;
 }) {
-  const body = (
-    <>
-      <p className="text-xs text-muted">{label}</p>
-      <p className={cx('mt-1 text-2xl leading-none font-semibold', tone && TONE[tone].text)}>
-        {value}
-      </p>
-      {sub && <div className="mt-1.5 text-xs text-muted">{sub}</div>}
-    </>
-  );
-
-  const shell =
-    'rounded-card border border-border bg-surface px-4 py-3.5 transition-colors';
-
-  if (href) {
-    return (
-      <a href={href} title={hint} className={cx(shell, 'block hover:border-border-strong')}>
-        {body}
-      </a>
-    );
-  }
   return (
-    <div title={hint} className={shell}>
-      {body}
-    </div>
+    <dl
+      className={cx(
+        'rise-list flex flex-wrap',
+        tone === 'brand' ? 'border-t-2 border-accent-700' : 'border-b-2 border-divider',
+        // Vạch dọc giữa các ô; ô cuối không có để cụm không treo một nét thừa ở mép.
+        tone === 'brand'
+          ? '[&>*:not(:last-child)]:border-r [&>*:not(:last-child)]:border-accent-600'
+          : '[&>*:not(:last-child)]:border-r [&>*:not(:last-child)]:border-divider',
+        className,
+      )}
+    >
+      {children}
+    </dl>
   );
 }
 
-/**
- * Con số MỞ ĐẦU của cả bảng điều khiển — **đúng một cái cho mỗi màn hình**.
- *
- * Có hai con số cỡ hero là không còn con số nào là hero nữa.
- */
-export function HeroStat({
+const SIZE = {
+  // Nền 10rem trên điện thoại: hai ô một hàng thay vì bốn ô chồng dọc chiếm
+  // trọn màn hình đầu tiên. Từ `sm` trở lên mới về đúng nền của bản thiết kế.
+  /** Hero trang Ngành. */
+  lg: { cell: 'basis-40 px-5 pt-4.5 pb-5 sm:basis-50', value: 'text-[34px]', unit: 'text-[17px]' },
+  /** Dải chỉ số dưới hero Tổng quan. */
+  xl: { cell: 'basis-40 px-6 py-5.5 sm:basis-55', value: 'text-[38px]', unit: 'text-[18px]' },
+  /** Dải mảnh của Kho tin. */
+  md: { cell: 'basis-40 px-5 pt-4 pb-4.5 sm:basis-45', value: 'text-[30px]', unit: 'text-base' },
+} as const;
+
+export function StatCell({
+  tone,
+  size = 'lg',
+  icon,
   label,
   value,
   unit,
   sub,
-  aside,
+  emphasis = false,
+  hint,
 }: {
-  label: string;
+  tone: 'brand' | 'plain';
+  size?: keyof typeof SIZE;
+  icon?: GlyphName;
+  label: ReactNode;
   value: ReactNode;
-  unit?: string;
+  /** Phần đuôi nhỏ, xám ("/ 318") — mẫu số đứng ngay cạnh con số. */
+  unit?: ReactNode;
   sub?: ReactNode;
-  aside?: ReactNode;
+  /** Con số chính của cả dải: tô màu accent. */
+  emphasis?: boolean;
+  hint?: string;
 }) {
+  const s = SIZE[size];
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="text-xs text-muted">{label}</p>
-        <p className="mt-1 flex items-baseline gap-2">
-          <span className="text-5xl leading-none font-semibold tracking-tight">{value}</span>
-          {unit && <span className="text-sm text-muted">{unit}</span>}
-        </p>
-        {sub && <div className="mt-2 text-sm text-muted">{sub}</div>}
-      </div>
-      {aside && <div className="text-right">{aside}</div>}
+    <div title={hint} className={cx('min-w-0 flex-1', s.cell)}>
+      <dt
+        className={cx(
+          'mb-2 flex items-center gap-1.75 text-xs',
+          tone === 'brand' ? 'text-accent-800' : 'text-neutral-700',
+          size === 'md' && 'mb-1.5',
+        )}
+      >
+        {icon && <Glyph name={icon} size={14} />}
+        {label}
+      </dt>
+      <dd className="m-0">
+        <span
+          className={cx(
+            'block font-heading leading-none font-extrabold',
+            s.value,
+            emphasis ? (tone === 'brand' && size === 'md' ? 'text-accent-800' : 'text-accent-700') : 'text-text',
+          )}
+        >
+          {value}
+          {unit && (
+            <span
+              className={cx(
+                s.unit,
+                tone === 'brand' && size === 'md' ? 'text-accent-800' : 'text-neutral-700',
+              )}
+            >
+              {unit}
+            </span>
+          )}
+        </span>
+        {sub && (
+          <span
+            className={cx(
+              'mt-1.5 block text-xs',
+              tone === 'brand' ? 'text-neutral-800' : 'text-neutral-600',
+            )}
+          >
+            {sub}
+          </span>
+        )}
+      </dd>
     </div>
   );
 }
 
-/** Dãy chỉ số. Số cột theo `min-width` chứ không theo mốc màn hình cố định. */
-export function StatRow({ children }: { children: ReactNode }) {
+/** Dòng kicker viết hoa phía trên tiêu đề hero. */
+export function Kicker({
+  icon,
+  className,
+  children,
+}: {
+  icon?: GlyphName;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
+    <p
+      className={cx(
+        'mb-3 flex flex-wrap items-center gap-2 text-[11px] tracking-[0.12em] text-accent-800 uppercase',
+        className,
+      )}
+    >
+      {icon && <Glyph name={icon} size={14} />}
       {children}
+    </p>
+  );
+}
+
+/**
+ * Một con số lớn kèm nhãn viết hoa — dùng ở mép phải hero (lương của tin,
+ * ba con số trang Lương). Vạch trái 2px là thứ gom chúng thành một cụm.
+ */
+export function Figure({
+  label,
+  value,
+  size = 40,
+  divided = false,
+  hint,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  size?: 29 | 40 | 42;
+  divided?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div title={hint} className={cx(divided && 'border-l-2 border-accent-600 px-5.5')}>
+      <p className="mb-1.5 text-[11px] tracking-widest text-accent-800 uppercase">{label}</p>
+      <p
+        className={cx(
+          'font-heading leading-none font-extrabold text-accent-800',
+          size === 42 ? 'text-[34px] sm:text-[42px]' : size === 40 ? 'text-[32px] sm:text-[40px]' : 'text-[29px]',
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }

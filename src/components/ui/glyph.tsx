@@ -22,26 +22,35 @@ import type { ReactNode } from 'react';
  */
 
 export type GlyphName =
+  | 'activity'
   | 'alert'
+  | 'arrowRight'
   | 'bars'
+  | 'bookmark'
   | 'briefcase'
   | 'building'
   | 'calendar'
   | 'check'
   | 'chevronDown'
+  | 'chevronLeft'
+  | 'chevronRight'
   | 'clock'
   | 'external'
   | 'funnel'
   | 'globe'
+  | 'key'
   | 'menu'
   | 'money'
   | 'pin'
+  | 'replay'
   | 'search'
+  | 'settings'
   | 'shield'
   | 'sparkle'
   | 'trend';
 
 const SHAPES: Record<GlyphName, ReactNode> = {
+  activity: <path d="M3 12h4l2-7 3 14 2.5-7H21" />,
   alert: (
     <>
       <path d="M12 3l9 16H3z" />
@@ -49,7 +58,9 @@ const SHAPES: Record<GlyphName, ReactNode> = {
       <circle cx="12" cy="16.5" r="0.7" fill="currentColor" />
     </>
   ),
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
   bars: <path d="M4 20V9M10 20V4M16 20v-7M22 20H2" />,
+  bookmark: <path d="M6 3h12v18l-6-4.5L6 21z" />,
   briefcase: (
     <>
       <rect x="2" y="7" width="20" height="14" />
@@ -70,6 +81,8 @@ const SHAPES: Record<GlyphName, ReactNode> = {
   ),
   check: <path d="M5 12l4 4 10-10" />,
   chevronDown: <path d="M6 9l6 6 6-6" />,
+  chevronLeft: <path d="M15 6l-6 6 6 6" />,
+  chevronRight: <path d="M9 6l6 6-6 6" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="10" />
@@ -90,6 +103,12 @@ const SHAPES: Record<GlyphName, ReactNode> = {
       <path d="M3 12h18M12 3c3 3 3 15 0 18-3-3-3-15 0-18" />
     </>
   ),
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+    </>
+  ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   money: (
     <>
@@ -104,10 +123,23 @@ const SHAPES: Record<GlyphName, ReactNode> = {
       <circle cx="12" cy="10" r="3" />
     </>
   ),
+  replay: (
+    <>
+      <path d="M4 4v6h6" />
+      <path d="M20 20v-6h-6" />
+      <path d="M20 9A8 8 0 0 0 6 6M4 15a8 8 0 0 0 14 3" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-4.3-4.3" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
     </>
   ),
   shield: (

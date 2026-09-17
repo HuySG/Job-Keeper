@@ -84,6 +84,18 @@ export async function getSourceHealth(): Promise<SourceHealth[]> {
   );
 }
 
+/**
+ * Tên các sàn đang bật — đủ cho những chỗ chỉ cần biết "có những sàn nào",
+ * không cần năm truy vấn đếm mỗi sàn như `getSourceHealth`.
+ */
+export async function getActiveSources(): Promise<{ code: string; name: string }[]> {
+  return db.source.findMany({
+    where: { isActive: true },
+    orderBy: { priority: 'asc' },
+    select: { code: true, name: true },
+  });
+}
+
 export type RunWithSources = Awaited<ReturnType<typeof getRecentRuns>>[number];
 
 /** Nhật ký các lần chạy gần nhất, kèm kết quả tách theo từng nguồn. */
