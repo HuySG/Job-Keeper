@@ -3,8 +3,8 @@
 > Viết ngày **17/09/2026**. Tài liệu có ba phần: **nghiệp vụ** (§2–§5),
 > **kiến trúc** (§6–§10), **thi công** (§11–§15).
 >
-> **Cập nhật 17/09/2026:** đã chốt Q1, Q2, Q7 (§14); **xong chặng 1, 2, 3** —
-> CSDL swe có 563 tin, kỹ năng và độ hợp CV đã chấm (§15). Còn chặng 4–7.
+> **Cập nhật 17/09/2026:** đã chốt Q1, Q2, Q7 (§14); **xong chặng 1–4** —
+> CSDL swe có 694 tin, độ hợp CV đã chấm, web chạy hai workspace (§15). Còn chặng 5–7.
 >
 > Không thay [plan.md](plan.md) (nhiệm vụ thu mua) hay [PLAN.md](../PLAN.md)
 > (kiến trúc tổng). Theo đúng quy ước của plan.md: số nào **đã kiểm** thì ghi
@@ -964,13 +964,53 @@ Software Developer PL/SQL/React (Hansen).
 **N1 chưa đạt:** 32/60 tin Hợp trở lên, từ 3 nguồn. Muốn đạt phải cào thêm
 nguồn và chờ tin mới, không phải nới luật chấm.
 
+### Dữ liệu swe thêm — 17/09/2026 (chạy nền trong lúc làm chặng 4)
+
+| Việc | Kết quả |
+|---|---|
+| `crawl --ws swe --full --source topdev,glints,vieclam24h --limit 150` | glints **125** mới · topdev 14 mới (4 lỗi: sàn trả 404 cho tin đã gỡ mà sitemap còn liệt kê) · vieclam24h 47 mới (3 lỗi: quá thời gian chờ) |
+| `recheck --ws swe --filter phan-mem-hcm` | 200 lượt gọi · còn tuyển 193 · **đã hết/đã gỡ 7** · được nguồn gia hạn 165 · không kết luận 0 |
+
+Tổng CSDL swe sau lượt này: **694 tin**; trang Ngành của tôi: 216 tin đúng ngành / 353 tin đã chấm.
+
+### Chặng 4 — web nhiều workspace · ✅ 17/09/2026
+
+| Việc | Kết quả |
+|---|---|
+| C13 | [api/workspace-db.ts](../src/api/workspace-db.ts) — `getDb(ws)`, một client mỗi workspace; mọi hàm `src/api` nhận `ws`. `field.api`: định nghĩa ngành tự mang `ws`, nên chấm bản nháp từ điển vẫn đọc đúng CSDL |
+| C14 | 8 trang dời vào `app/(site)/[ws]/`; [middleware.ts](../src/middleware.ts): `/` → workspace vừa xem (cookie `bj-ws`), gắn header workspace cho layout gốc, đoạn đầu lạ → 404; `next.config.ts`: 7 đường dẫn cũ → 308 sang `/bae/...` |
+| C15 | Công tắc workspace cạnh logo (giữ trang đang đứng, bỏ query; trang chi tiết tin → Kho tin); mục "Ngành" mang nhãn workspace; bảng màu theo workspace — bae giữ nguyên cookie `bj-theme` cũ, swe mặc định xanh dương |
+| C16 | `toggleSavedJob`, `saveDictionary`, `setAppearance` đọc `ws` từ form; `SaveContext` mang `ws` |
+| C17 | [tests/workspace-web.test.ts](../tests/workspace-web.test.ts) — cấm `src/{app,api,actions,components,lib}` import `@/api/db`; cấm viết cứng đường dẫn trang |
+| C18 | Thiếu `DATABASE_URL_SWE` → layout vẽ lời nhắn nêu tên biến + nút sang workspace kia; thanh điều hướng vẫn vẽ |
+
+**Kiểm trên máy chủ production ở máy** (`next build` + `next start`), 24/24 ca đúng:
+`/` → 307 `/bae` · `/nganh?loai=…`, `/viec/5`, `/cai-dat` → 308 giữ query ·
+16 trang của hai workspace → 200, `Cache-Control: no-store` (vẫn dựng động) ·
+`/abc/nganh`, `/khong-co-trang` → 404 **có chữ trong HTML** · máy chủ không có
+`DATABASE_URL_SWE`: `/swe/...` → lời nhắn trong HTML, `/bae/nganh` vẫn chạy.
+Bảng màu `pastel-green`/`blue` đúng workspace; tiêu đề trang "Ngành của Bae" /
+"Ngành của tôi"; 20 form lưu tin mỗi trang mang đúng `ws`; mở `/swe/luong` rồi
+vào `/` → `/swe`.
+
+**N0 — Bae không đổi:** `/bae/nganh` hiện **300 tin đúng ngành / 985 tin đã
+chấm**, khớp `npm run match` của bae (985 / 300).
+
+**Một lỗi có TỪ TRƯỚC, khoanh bằng bản dựng của commit `17655c0`:** trên Next
+15.5, 404 phát sinh trong lúc dựng route (`notFound()`) chỉ nằm trong payload
+JavaScript — trình duyệt tắt JS thấy trang trắng. Bản cũ cũng thế với
+`/viec/99999999`; chỉ 404 của đường dẫn không khớp route nào là dựng đủ. Tách
+workspace suýt làm lỗi lan rộng (`[ws]` khớp mọi đoạn đầu), nên: middleware
+chuyển đoạn đầu lạ sang 404 "không khớp", và ca thiếu CSDL không đi qua
+`notFound()`. Còn đúng một ca — số hiệu tin không có thật — ghi ở
+[deploy.md §6d](deploy.md).
+
 ### Việc tiếp theo
 
 | # | Việc | Ai |
 |---|---|---|
-| C13–C18 | Chặng 4 — web nhiều workspace (`/bae/...`, `/swe/...`) | tôi |
-| — | Cào nốt topdev, glints, vieclam24h (timviec365 chậm, để sau) | tôi |
-| — | `recheck --ws swe` cho 167 tin chưa kiểm còn-sống | tôi, hoặc để lịch CI ở chặng 6 |
+| C19–C21 | Chặng 5 — trang Ngành của tôi: ô lọc mức hợp CV, loại việc, hình thức làm; thẻ tin hiện khớp/thiếu; khoảng trống kỹ năng ở trang Lương | tôi |
+| — | Thêm `DATABASE_URL_SWE` vào Vercel (Production/Preview/Development) — chưa thêm thì `/swe` hiện lời nhắn "chưa có CSDL" | **anh** |
 | — | Khai Variable `USD_VND_RATE` trên GitHub | **anh** — Settings → Secrets and variables → Actions → Variables |
 | — | Đổi mật khẩu CSDL swe (chuỗi kết nối đã dán vào khung chat) | **anh** — Neon → Roles → Reset password, rồi sửa `.env` |
 | — | Chuyển repo sang public | **anh** — Settings → General → Danger Zone |

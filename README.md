@@ -68,17 +68,23 @@ Năm màn hình chính, mỗi màn hình trả lời **đúng một câu hỏi**
 câu hỏi trùng với trang đã có, thì đó là một khối trong trang cũ chứ không phải
 một trang mới.
 
+Mọi trang nằm dưới **workspace**: `/bae/...` là **Ngành của Bae** (thu mua),
+`/swe/...` là **Ngành của tôi** (phần mềm). Công tắc cạnh logo đổi workspace và
+giữ nguyên trang đang đứng; mỗi workspace một bảng màu (xanh lá / xanh dương).
+`/` đưa về workspace vừa xem; đường dẫn cũ (`/nganh`, `/viec/123`…) chuyển
+hướng sang `/bae/...`.
+
 | Đường dẫn | Trả lời câu |
 |---|---|
-| `/` **Tổng quan** | Kho tin đang có gì, và có đáng tin không? |
-| `/nganh` **Ngành của tôi** | Tin nào đúng ngành tôi nhắm, và có còn tuyển không? |
-| `/viec` **Kho tin** | Tin nào khớp với thứ tôi đang tìm? |
-| `/luong` **Lương** | Ngành tôi trả bao nhiêu, và bao nhiêu tin dám ghi số? |
-| `/nguon` **Nguồn & vận hành** | Crawler còn sống không, nguồn nào đang hỏng? |
+| `/{ws}` **Tổng quan** | Kho tin đang có gì, và có đáng tin không? |
+| `/{ws}/nganh` **Ngành của Bae / của tôi** | Tin nào đúng ngành tôi nhắm, và có còn tuyển không? |
+| `/{ws}/viec` **Kho tin** | Tin nào khớp với thứ tôi đang tìm? |
+| `/{ws}/luong` **Lương** | Ngành tôi trả bao nhiêu, và bao nhiêu tin dám ghi số? |
+| `/{ws}/nguon` **Nguồn & vận hành** | Crawler còn sống không, nguồn nào đang hỏng? |
 
-Ba trang phụ nằm ở nút bên phải thanh điều hướng: `/da-luu` **Tin đã lưu**,
-`/cai-dat` **Cài đặt** (từ điển ngành, bảng màu, chuyển động) và
-`/thanh-phan` **Bộ thành phần** — tài liệu sống của hệ giao diện.
+Ba trang phụ nằm ở nút bên phải thanh điều hướng: `/{ws}/da-luu` **Tin đã lưu**,
+`/{ws}/cai-dat` **Cài đặt** (từ điển ngành, bảng màu, chuyển động) và
+`/thanh-phan` **Bộ thành phần** — tài liệu sống của hệ giao diện, dùng chung.
 
 Giao diện dựng theo bản thiết kế **Bae-Job v2** (Claude Design): hệ Modernist —
 góc vuông, vạch 2px, Archivo 800 — nhuộm xanh lá pastel, có bảng màu xanh dương
@@ -138,7 +144,7 @@ Thêm một thư viện biểu đồ cho vài chục hình chữ nhật là đá
 | `npm run repair:salary` | Tính lại lương cho tin **không có blob**, từ `salaryRaw`. Mặc định chạy khô; `-- --apply` để ghi, kèm `JobAudit` |
 | `npm run db:push` / `db:seed` / `db:studio` | Thao tác CSDL |
 | `... -- --ws swe` | **Chọn workspace** cho mọi lệnh trên (mặc định `bae`). Xem bên dưới |
-| `npm test` | 263 test, chạy trên fixture JSON-LD **thật** của 3 sàn |
+| `npm test` | 412 test, chạy trên fixture JSON-LD **thật** và tiêu đề tin thật |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run dev` | **Bảng điều khiển web** ở http://localhost:3000 |
 | `npm run build` / `npm start` | Bản production |

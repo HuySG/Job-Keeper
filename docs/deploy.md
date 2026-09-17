@@ -27,7 +27,7 @@ mới cho tới lần cào sau. Muốn tự động thì dùng GitHub Actions
 
 ---
 
-## 1. Biến môi trường — một cái bắt buộc, một cái nên có
+## 1. Biến môi trường — hai chuỗi kết nối, một khoá sửa
 
 Đã rà bằng grep toàn bộ `src/`: mọi biến khác (`CRAWLER_CONTACT_EMAIL`,
 `BLOB_DRIVER`, `USD_VND_RATE`, `R2_*`) chỉ được đọc trong module của crawler,
@@ -46,6 +46,20 @@ Ba điều về chuỗi này:
 3. Đừng dán vào `vercel.json` hay bất cứ file nào được commit. Nó là mật khẩu.
 
 ```
+DATABASE_URL_SWE = postgresql://…-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+```
+
+CSDL của workspace **swe** (Ngành của tôi) — Neon project RIÊNG, cùng vùng
+`ap-southeast-1` (xem [plan-swe.md §7](plan-swe.md)). Cùng ba điều như trên.
+
+- **Không đặt** → mọi trang `/swe/...` hiện lời nhắn "chưa có CSDL trên máy chủ
+  này" kèm tên biến còn thiếu; workspace bae chạy bình thường.
+- Hai biến trỏ **cùng một** CSDL (kể cả một bên pooled, một bên direct) → web
+  từ chối dựng trang: đó là cấu hình sai, không bao giờ là cố ý.
+- `DATABASE_URL` vẫn là chuỗi của workspace **bae**; có thể đổi tên thành
+  `DATABASE_URL_BAE` (tên đó thắng nếu có cả hai).
+
+```
 EDIT_KEY = <một chuỗi ngẫu nhiên dài, ví dụ: openssl rand -base64 24>
 ```
 
@@ -56,7 +70,7 @@ Trang chạy công khai không đăng nhập, nên hai đường ghi đó bị k
 - **Không đặt** → bản production ở chế độ chỉ đọc: nút lưu mờ đi, trang Cài đặt
   xem trước được nhưng không lưu được. Mặc định khoá là cố ý — quên đặt biến
   thì mất tính năng, chứ không mở toang cho người lạ sửa từ điển.
-- **Có đặt** → mở trang `/cai-dat`, nhập đúng chuỗi này một lần; trình duyệt
+- **Có đặt** → mở trang `/bae/cai-dat` (hoặc `/swe/cai-dat`), nhập đúng chuỗi này một lần — một khoá dùng cho cả hai workspace; trình duyệt
   giữ quyền sửa 180 ngày. Đổi giá trị biến là thu hồi quyền trên mọi máy.
 - Máy dev (`npm run dev`) không cần biến này — ghi được luôn.
 
@@ -108,7 +122,7 @@ Repo đã có sẵn: `https://github.com/HuySG/Job-Keeper.git`
      Prisma Client thì sẽ chạy nhầm client cũ và lỗi rất khó hiểu.
    - Output Directory: `.next`
    - Install Command: `npm install`
-3. Mở **Environment Variables**, thêm `DATABASE_URL` và `EDIT_KEY` (mục 1) cho cả ba môi trường.
+3. Mở **Environment Variables**, thêm `DATABASE_URL`, `DATABASE_URL_SWE` và `EDIT_KEY` (mục 1) cho cả ba môi trường.
 4. **Deploy**.
 
 Từ đó mỗi lần `git push` lên `master` là Vercel tự deploy production; mỗi nhánh
@@ -127,6 +141,7 @@ terminal:
 $env:VERCEL_TOKEN = "<token vừa tạo>"
 npx vercel link --yes --token $env:VERCEL_TOKEN
 npx vercel env add DATABASE_URL production --token $env:VERCEL_TOKEN
+npx vercel env add DATABASE_URL_SWE production --token $env:VERCEL_TOKEN
 npx vercel env add EDIT_KEY production --token $env:VERCEL_TOKEN
 npx vercel --prod --token $env:VERCEL_TOKEN
 ```
@@ -142,17 +157,19 @@ Theo đúng thứ tự này, vì mỗi bước loại được một nguyên nh�
 
 | # | Mở | Phải thấy |
 |---|---|---|
-| 1 | `/nguon` | Bảng nguồn + lần chạy gần nhất → **CSDL nối được** |
-| 2 | `/nganh` | ~189 tin thu mua, ô "đã kiểm trong 48h" | 
-| 3 | `/viec?q=thu+mua&province=ho-chi-minh` | Có kết quả → bộ lọc chạy |
-| 4 | `/viec/999999` | Trang "không tìm thấy", không phải lỗi 500 |
+| 1 | `/` | Chuyển về `/bae` (hoặc workspace vừa xem) → **middleware chạy** |
+| 2 | `/bae/nguon` | Bảng nguồn + lần chạy gần nhất → **CSDL bae nối được** |
+| 3 | `/bae/nganh` | Tin thu mua, ô "đã kiểm trong 48h", bảng màu xanh lá |
+| 4 | `/nganh` | Chuyển 308 sang `/bae/nganh` → **đường dẫn cũ còn sống** |
+| 5 | `/swe/nganh` | Tin phần mềm, bảng màu xanh dương — hoặc lời nhắn "chưa có CSDL" nếu chưa đặt `DATABASE_URL_SWE` |
+| 6 | `/abc` | Trang "không tìm thấy", không phải lỗi 500 |
 
 Trang trắng kèm lỗi 500 ở bước 1 gần như luôn là `DATABASE_URL` — chưa đặt,
 đặt nhầm môi trường, hoặc dùng chuỗi direct thay vì pooled.
 
 ---
 
-## 6. Ba kiểu hỏng đã biết trước
+## 6. Bốn kiểu hỏng đã biết trước
 
 **a. Lần mở đầu tiên sau vài phút im lặng bị chậm 2–3 giây.**
 Neon gói Free ngủ khi không có truy vấn. Không phải lỗi. Đây cũng đúng là lý do
@@ -171,6 +188,14 @@ từ điển bằng JS — phân trang làm trong bộ nhớ. Đánh đổi có 
 câu `UPDATE` mà không phải đụng SQL. Khi phạm vi vượt vài nghìn tin thì phải
 chuyển sang cột `tsvector` + index GIN. Con số cần theo dõi là **"đã chấm"**
 ngay trên trang.
+
+**d. Trình duyệt tắt JavaScript thấy trang trắng ở "tin không tồn tại".**
+Đo 17/09/2026 trên Next 15.5: 404 phát sinh TRONG lúc dựng một trang
+(`notFound()` khi `/bae/viec/999999` không có trong CSDL) chỉ nằm trong
+payload JavaScript — có từ trước khi tách workspace. 404 của đường dẫn không
+khớp route nào thì dựng đủ trong HTML, nên middleware chuyển mọi đoạn đầu lạ
+(`/abc/...`) sang loại đó; workspace chưa có CSDL thì layout vẽ lời nhắn thẳng,
+không qua `notFound()`. Còn lại đúng một ca: số hiệu tin không có thật.
 
 ---
 

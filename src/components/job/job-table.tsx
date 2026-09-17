@@ -3,7 +3,9 @@ import type { JobListItem } from '@/api/job.api';
 import type { SaveContext } from '@/api/saved.api';
 import { Glyph } from '@/components/ui/glyph';
 import { cx } from '@/components/ui/tone';
+import type { WorkspaceId } from '@/constants/workspace';
 import { salaryValue } from '@/lib/field-bands';
+import { wsHref } from '@/lib/workspace-path';
 import { daysLeft, formatSalary, jobStatusMeta } from '@/utils/format';
 
 import { experienceYears } from './field-job-card';
@@ -27,10 +29,12 @@ export const SHORT_RUNWAY_DAYS = 14;
 const RUNWAY_FULL_DAYS = 90;
 
 export function JobTable({
+  ws,
   items,
   judge,
   save,
 }: {
+  ws: WorkspaceId;
   items: JobListItem[];
   judge: ((job: JobListItem) => FieldVerdict) | null;
   save: SaveContext;
@@ -51,7 +55,7 @@ export function JobTable({
         </thead>
         <tbody className="rise-list">
           {items.map((job) => (
-            <Row key={job.id} job={job} verdict={judge?.(job) ?? null} save={save} />
+            <Row key={job.id} ws={ws} job={job} verdict={judge?.(job) ?? null} save={save} />
           ))}
         </tbody>
       </table>
@@ -60,10 +64,12 @@ export function JobTable({
 }
 
 function Row({
+  ws,
   job,
   verdict,
   save,
 }: {
+  ws: WorkspaceId;
   job: JobListItem;
   verdict: FieldVerdict | null;
   save: SaveContext;
@@ -94,7 +100,7 @@ function Row({
             }
           />
           <a
-            href={`/viec/${job.id}`}
+            href={wsHref(ws, `/viec/${job.id}`)}
             className="font-heading text-[15px] leading-[1.25] font-extrabold text-text hover:text-accent-700"
           >
             {job.title}

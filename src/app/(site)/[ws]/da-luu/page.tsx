@@ -14,10 +14,12 @@ import { Glyph } from '@/components/ui/glyph';
 import { Mascot } from '@/components/ui/mascot';
 import { CheckedLabel, IdleDot, LiveDot } from '@/components/ui/status';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG } from '@/constants/field';
 import { SAVED_JOB_LIMIT } from '@/constants/saved';
+import { WORKSPACES } from '@/constants/workspace';
 import { salaryValue } from '@/lib/field-bands';
 import { readParam, type SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import { daysLeft, formatCount, formatSalary, jobStatusMeta, timeAgo } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
@@ -37,13 +39,20 @@ const ALIVE = new Set(['OPEN', 'STALE']);
  * sàn nguồn đóng tin"; biến mất lặng lẽ thì người dùng tưởng mình lỡ tay xoá.
  * Chúng chuyển xuống cuối, mờ đi, ghi rõ lý do, và chờ người dùng tự bỏ.
  */
-export default async function SavedPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function SavedPage({
+  params: routeParams,
+  searchParams,
+}: {
+  params: Promise<{ ws: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
+  const ws = await workspaceParam(routeParams);
   const params = await searchParams;
   const [entries, state, save, field] = await Promise.all([
-    listSavedJobs(),
-    getSavedState(),
-    getSaveContext(),
-    findFieldJobs(DEFAULT_FIELD_SLUG),
+    listSavedJobs(ws),
+    getSavedState(ws),
+    getSaveContext(ws),
+    findFieldJobs(ws, WORKSPACES[ws].defaultField),
   ]);
 
   const open = entries.filter((entry) => ALIVE.has(entry.job.status));
@@ -86,12 +95,12 @@ export default async function SavedPage({ searchParams }: { searchParams: Promis
       <div className="flex flex-col gap-3.5 px-4 pt-5.5 pb-10 sm:px-6">
         {!state.ready ? (
           <Empty title="Bảng tin đã lưu chưa có trong CSDL">
-            Mã mới đã lên nhưng CSDL chưa được cập nhật. Chạy <Cmd>npm run db:push</Cmd> một lần — lệnh
+            Mã mới đã lên nhưng CSDL chưa được cập nhật. Chạy <Cmd>npm run db:push -- --ws {ws}</Cmd> một lần — lệnh
             này chỉ THÊM bảng <Cmd>SavedJob</Cmd>, không đụng dữ liệu cũ.
           </Empty>
         ) : (
           <>
-            <EditLock back="/da-luu" wrong={readParam(params, 'khoa') === 'sai'} />
+            <EditLock back={wsHref(ws, '/da-luu')} wrong={readParam(params, 'khoa') === 'sai'} />
 
             {[...open, ...closed].map((entry, index) => (
               <SavedCard key={entry.job.id} entry={entry} save={save} delay={Math.min(index, 7) * 0.06} />
@@ -111,7 +120,7 @@ export default async function SavedPage({ searchParams }: { searchParams: Promis
                   Lưu tối đa {SAVED_JOB_LIMIT} tin. Tin đã lưu được kiểm còn-sống mỗi ngày, nên đừng tiếc mà
                   bỏ qua tin hay. Bấm nút lưu ở thẻ tin, ở bảng Kho tin hoặc ở trang chi tiết.
                 </p>
-                <a href="/nganh" className="btn btn-secondary gap-2">
+                <a href={wsHref(ws, '/nganh')} className="btn btn-secondary gap-2">
                   Quay lại {field ? `${formatCount(field.total)} tin trong ngành` : 'danh sách ngành'}
                   <Glyph name="arrowRight" size={15} />
                 </a>
@@ -155,7 +164,7 @@ function SavedCard({ entry, save, delay }: { entry: SavedEntry; save: SaveContex
             </span>
           )}
           <h4 className="text-[21px] leading-[1.18] text-pretty">
-            <a href={`/viec/${job.id}`} className="text-text hover:text-accent-700">
+            <a href={wsHref(save.ws, `/viec/${job.id}`)} className="text-text hover:text-accent-700">
               {job.title}
             </a>
           </h4>

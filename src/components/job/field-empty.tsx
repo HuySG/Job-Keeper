@@ -3,6 +3,7 @@ import { Callout } from '@/components/ui/callout';
 import { Cmd, Empty } from '@/components/ui/empty';
 import { Glyph } from '@/components/ui/glyph';
 import { buildUrl, readParam, type SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
 import { formatCount } from '@/utils/format';
 
 import { activeFieldFilters } from './field-active-filters';
@@ -95,7 +96,7 @@ export function FieldEmpty({
               Xoá hết bộ lọc · về {formatCount(result.inFieldTotal)} tin
               <Glyph name="arrowRight" size={16} />
             </a>
-            <a href="/cai-dat" className="btn btn-ghost h-11.5 px-4">
+            <a href={wsHref(result.ws, '/cai-dat')} className="btn btn-ghost h-11.5 px-4">
               Sửa từ điển ngành
             </a>
           </div>

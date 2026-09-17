@@ -2,7 +2,8 @@ import 'server-only';
 
 import type { Prisma } from '@prisma/client';
 
-import { db } from '@/api/db';
+import { getDb } from '@/api/workspace-db';
+import type { WorkspaceId } from '@/constants/workspace';
 import { toMatchKey } from '@/crawler/normalize/text';
 import { JobStatus } from '@/enums';
 import { readFlag, readNumber, readParam, type SearchParams } from '@/lib/query';
@@ -150,7 +151,8 @@ export interface JobPage {
   pageCount: number;
 }
 
-export async function findJobs(filters: JobFilters): Promise<JobPage> {
+export async function findJobs(ws: WorkspaceId, filters: JobFilters): Promise<JobPage> {
+  const db = getDb(ws);
   const where = buildWhere(filters);
   const requested = Math.max(1, Math.trunc(filters.page ?? 1));
 
@@ -172,7 +174,8 @@ export async function findJobs(filters: JobFilters): Promise<JobPage> {
 }
 
 /** Tin mới nhất cho trang tổng quan. Luôn là tin còn sống. */
-export async function getRecentJobs(limit = 6): Promise<JobListItem[]> {
+export async function getRecentJobs(ws: WorkspaceId, limit = 6): Promise<JobListItem[]> {
+  const db = getDb(ws);
   return db.jobPosting.findMany({
     where: { status: { in: ALIVE } },
     orderBy: { postedAt: 'desc' },
@@ -189,7 +192,8 @@ const DETAIL_INCLUDE = {
 
 export type JobDetail = Prisma.JobPostingGetPayload<{ include: typeof DETAIL_INCLUDE }>;
 
-export async function getJob(id: number): Promise<JobDetail | null> {
+export async function getJob(ws: WorkspaceId, id: number): Promise<JobDetail | null> {
+  const db = getDb(ws);
   if (!Number.isInteger(id) || id <= 0) return null;
   return db.jobPosting.findUnique({ where: { id }, include: DETAIL_INCLUDE });
 }
@@ -203,7 +207,8 @@ export interface FilterOptions {
 }
 
 /** Dữ liệu cho các ô lọc. Chỉ đếm trên tin còn sống để không hiện lựa chọn rỗng. */
-export async function getFilterOptions(): Promise<FilterOptions> {
+export async function getFilterOptions(ws: WorkspaceId): Promise<FilterOptions> {
+  const db = getDb(ws);
   const alive = { status: { in: ALIVE } };
 
   const [provinces, levels, sources, total, withSalary] = await Promise.all([

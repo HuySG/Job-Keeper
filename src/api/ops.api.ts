@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { db } from '@/api/db';
+import { getDb } from '@/api/workspace-db';
+import type { WorkspaceId } from '@/constants/workspace';
 import { JobStatus } from '@/enums';
 
 /**
@@ -44,7 +45,8 @@ export interface SourceHealth {
  * trên `JobPosting`. Gom nhóm trên tin đăng thì nguồn hỏng — nguồn đáng lo
  * nhất — sẽ biến mất khỏi danh sách, đúng lúc cần nhìn thấy nó nhất.
  */
-export async function getSourceHealth(): Promise<SourceHealth[]> {
+export async function getSourceHealth(ws: WorkspaceId): Promise<SourceHealth[]> {
+  const db = getDb(ws);
   const sources = await db.source.findMany({ orderBy: [{ isActive: 'desc' }, { priority: 'asc' }] });
 
   return Promise.all(
@@ -88,7 +90,8 @@ export async function getSourceHealth(): Promise<SourceHealth[]> {
  * Tên các sàn đang bật — đủ cho những chỗ chỉ cần biết "có những sàn nào",
  * không cần năm truy vấn đếm mỗi sàn như `getSourceHealth`.
  */
-export async function getActiveSources(): Promise<{ code: string; name: string }[]> {
+export async function getActiveSources(ws: WorkspaceId): Promise<{ code: string; name: string }[]> {
+  const db = getDb(ws);
   return db.source.findMany({
     where: { isActive: true },
     orderBy: { priority: 'asc' },
@@ -99,7 +102,8 @@ export async function getActiveSources(): Promise<{ code: string; name: string }
 export type RunWithSources = Awaited<ReturnType<typeof getRecentRuns>>[number];
 
 /** Nhật ký các lần chạy gần nhất, kèm kết quả tách theo từng nguồn. */
-export async function getRecentRuns(limit = 10) {
+export async function getRecentRuns(ws: WorkspaceId, limit = 10) {
+  const db = getDb(ws);
   return db.crawlRun.findMany({
     orderBy: { startedAt: 'desc' },
     take: Math.max(1, Math.min(50, Math.trunc(limit))),
@@ -125,7 +129,8 @@ export interface ParseHealth {
  * lương. Tỷ lệ này trôi lên là dấu hiệu một sàn vừa đổi bố cục, và đó là thứ
  * cần biết TRƯỚC khi các biểu đồ lương bắt đầu nói sai.
  */
-export async function getParseHealth(): Promise<ParseHealth> {
+export async function getParseHealth(ws: WorkspaceId): Promise<ParseHealth> {
+  const db = getDb(ws);
   const rows = await db.jobPosting.groupBy({ by: ['parseStatus'], _count: true });
   const byStatus = new Map(rows.map((row) => [row.parseStatus, row._count]));
   return {
@@ -142,7 +147,8 @@ export async function getParseHealth(): Promise<ParseHealth> {
  * một lỗi trong parser rồi tính lại toàn bộ lịch sử mà không phải cào lại
  * nguồn. Tỷ lệ này tụt xuống là mất khả năng đó, và mất trong im lặng.
  */
-export async function getReparseCoverage(): Promise<{ withBlob: number; total: number }> {
+export async function getReparseCoverage(ws: WorkspaceId): Promise<{ withBlob: number; total: number }> {
+  const db = getDb(ws);
   const [withBlob, total] = await Promise.all([
     db.jobPosting.count({ where: { rawKey: { not: null } } }),
     db.jobPosting.count(),

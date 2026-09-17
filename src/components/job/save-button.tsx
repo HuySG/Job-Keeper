@@ -37,6 +37,7 @@ export function SaveJobButton({
 
   return (
     <form action={toggleSavedJob} className={cx(variant === 'block' ? 'w-full' : 'inline-flex', className)}>
+      <input type="hidden" name="ws" value={context.ws} />
       <input type="hidden" name="postingId" value={jobId} />
       <input type="hidden" name="intent" value={saved ? 'unsave' : 'save'} />
       <button

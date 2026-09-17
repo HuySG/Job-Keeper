@@ -3,6 +3,7 @@ import { Archivo } from 'next/font/google';
 import type { ReactNode } from 'react';
 
 import { getAppearance } from '@/lib/appearance';
+import { currentWorkspace } from '@/lib/workspace-route';
 
 import '@/styles/globals.css';
 
@@ -52,7 +53,8 @@ export const viewport: Viewport = {
  * nhịp rồi mới đổi.
  */
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const appearance = await getAppearance();
+  // Bảng màu theo workspace của đường dẫn đang mở — xem middleware.ts.
+  const appearance = await getAppearance(await currentWorkspace());
 
   return (
     <html

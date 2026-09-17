@@ -12,18 +12,23 @@ import { Cmd, Empty } from '@/components/ui/empty';
 import { Glyph } from '@/components/ui/glyph';
 import { Mascot } from '@/components/ui/mascot';
 import { Kicker, StatCell, StatStrip } from '@/components/ui/stat';
-import { DEFAULT_FIELD_SLUG, FRESH_CHECK_HOURS } from '@/constants/field';
+import { FRESH_CHECK_HOURS } from '@/constants/field';
 import { PURCHASE_TYPES, PURCHASE_TYPE_UNKNOWN } from '@/constants/purchase';
+import { WORKSPACES, isWorkspaceId, type WorkspaceId } from '@/constants/workspace';
 import { SaturdayWork } from '@/enums';
 import { EXPERIENCE_VALUES, FACET_NONE, SALARY_VALUES, onlyKnown } from '@/lib/field-bands';
 import { buildUrl, readFlag, readNumber, readParam, readParams, type SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import { formatCount, formatPercent, millions } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Ngành của tôi' };
-
-const PATH = '/nganh';
+/** Tên trang theo workspace — "Ngành của Bae" hay "Ngành của tôi". */
+export async function generateMetadata({ params }: { params: Promise<{ ws: string }> }) {
+  const { ws } = await params;
+  return { title: isWorkspaceId(ws) ? WORKSPACES[ws].label : 'Ngành' };
+}
 
 /** Từ vựng hợp lệ của các chiều lọc CỐ ĐỊNH — dùng để bỏ giá trị lạ trong URL. */
 const PURCHASE_SLUGS: readonly string[] = [...PURCHASE_TYPES, PURCHASE_TYPE_UNKNOWN].map(
@@ -62,16 +67,20 @@ const SATURDAY_VALUES: readonly string[] = [...Object.values(SaturdayWork), FACE
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export default async function FieldPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ ws: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  const ws = await workspaceParam(routeParams);
+  const PATH = wsHref(ws, '/nganh');
   const params = await searchParams;
-  const slug = readParam(params, 'f') ?? DEFAULT_FIELD_SLUG;
+  const slug = readParam(params, 'f') ?? WORKSPACES[ws].defaultField;
   const includeWeak = readFlag(params, 'weak');
 
   const [result, fields, save] = await Promise.all([
-    findFieldJobs(slug, {
+    findFieldJobs(ws, slug, {
       page: readNumber(params, 'page'),
       cumulative: true,
       includeWeak,
@@ -86,15 +95,15 @@ export default async function FieldPage({
       experience: onlyKnown(readParams(params, 'kn'), EXPERIENCE_VALUES),
       salary: onlyKnown(readParams(params, 'luong'), SALARY_VALUES),
     }),
-    listFields(),
-    getSaveContext(),
+    listFields(ws),
+    getSaveContext(ws),
   ]);
 
   if (!result) {
     return (
       <Empty title={`Chưa có ngành “${slug}”`}>
         Ngành được định nghĩa trong <Cmd>src/constants/field</Cmd> rồi nạp vào bảng{' '}
-        <Cmd>SavedFilter</Cmd>. Chạy <Cmd>npm run db:seed</Cmd> để nạp.
+        <Cmd>SavedFilter</Cmd>. Chạy <Cmd>npm run db:seed -- --ws {ws}</Cmd> để nạp.
       </Empty>
     );
   }
@@ -204,6 +213,7 @@ export default async function FieldPage({
               {result.items.map((row, index) => (
                 <Fragment key={row.job.id}>
                   <FieldJobCard
+                    ws={ws}
                     row={row}
                     fieldMedian={result.stats.salaryMedian}
                     save={save}
@@ -213,7 +223,7 @@ export default async function FieldPage({
                     delay={Math.min(index % PAGE_SIZE, 7) * 0.06}
                   />
                   {index === Math.min(2, result.items.length - 1) && (
-                    <HonestyNote fresh={result.freshlyChecked} total={result.total} />
+                    <HonestyNote ws={ws} fresh={result.freshlyChecked} total={result.total} />
                   )}
                 </Fragment>
               ))}
@@ -246,14 +256,17 @@ export default async function FieldPage({
  * Đứng ở đây chứ không ở cuối trang: người đọc tới tin thứ ba là đã bắt đầu
  * tin vào danh sách, đúng lúc phải được nhắc rằng phần lớn tin chưa ai gọi lại.
  */
-function HonestyNote({ fresh, total }: { fresh: number; total: number }) {
+function HonestyNote({ ws, fresh, total }: { ws: WorkspaceId; fresh: number; total: number }) {
   return (
     <Callout
       tone="live"
       className="gap-4 px-5 py-4"
       icon={<Mascot pose="head" width={40} motion="none" />}
       action={
-        <a href="/nguon" className="btn btn-secondary border-live-700 whitespace-nowrap text-live-700 hover:text-live-700">
+        <a
+          href={wsHref(ws, '/nguon')}
+          className="btn btn-secondary border-live-700 whitespace-nowrap text-live-700 hover:text-live-700"
+        >
           Xem Nguồn &amp; vận hành
         </a>
       }

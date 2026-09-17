@@ -12,10 +12,13 @@ import { Mascot } from '@/components/ui/mascot';
 import { isFreshlyChecked } from '@/components/ui/status';
 import { Figure } from '@/components/ui/stat';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG, FRESH_CHECK_HOURS } from '@/constants/field';
+import { FRESH_CHECK_HOURS } from '@/constants/field';
+import { WORKSPACES, isWorkspaceId } from '@/constants/workspace';
 import { salaryValue } from '@/lib/field-bands';
 import { readParam, type SearchParams } from '@/lib/query';
 import { classifyPurchase } from '@/lib/purchase-type';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import {
   daysLeft,
   employmentLabel,
@@ -31,13 +34,14 @@ import {
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ ws: string; id: string }>;
   searchParams: Promise<SearchParams>;
 }
 
 export async function generateMetadata({ params }: PageProps) {
-  const { id } = await params;
-  const job = await getJob(Number(id));
+  const { ws, id } = await params;
+  if (!isWorkspaceId(ws)) return { title: 'Không tìm thấy tin' };
+  const job = await getJob(ws, Number(id)).catch(() => null);
   return { title: job ? job.title : 'Không tìm thấy tin' };
 }
 
@@ -57,14 +61,15 @@ const EXCERPT_CHARS = 600;
  * nên dùng thoải mái, còn văn bản mô tả thì có bản quyền.
  */
 export default async function JobDetailPage({ params, searchParams }: PageProps) {
-  const [{ id }, query] = await Promise.all([params, searchParams]);
-  const job = await getJob(Number(id));
+  const [ws, { id }, query] = await Promise.all([workspaceParam(params), params, searchParams]);
+  const job = await getJob(ws, Number(id));
   if (!job) notFound();
 
+  const fieldSlug = WORKSPACES[ws].defaultField;
   const [definition, field, save] = await Promise.all([
-    getFieldDefinition(DEFAULT_FIELD_SLUG),
-    findFieldJobs(DEFAULT_FIELD_SLUG),
-    getSaveContext(),
+    getFieldDefinition(ws, fieldSlug),
+    findFieldJobs(ws, fieldSlug),
+    getSaveContext(ws),
   ]);
 
   const verdict = definition ? fieldJudge(definition)(job) : null;
@@ -100,7 +105,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
   return (
     <>
       <div className="border-b-2 border-divider px-4 py-3.5 sm:px-6">
-        <a href={fromField ? '/nganh' : '/viec'} className="btn btn-ghost gap-1.75 text-[13px]">
+        <a href={wsHref(ws, fromField ? '/nganh' : '/viec')} className="btn btn-ghost gap-1.75 text-[13px]">
           <Glyph name="chevronLeft" size={14} />
           {fromField && field ? `Về danh sách ${formatCount(field.total)} tin` : 'Về kho tin'}
         </a>
@@ -213,7 +218,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
                     {hit}
                   </span>
                 ))}
-                <a href="/cai-dat" className="tag tag-outline px-3 py-1.75">
+                <a href={wsHref(ws, '/cai-dat')} className="tag tag-outline px-3 py-1.75">
                   + thêm vào từ điển
                 </a>
               </div>
@@ -287,7 +292,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
                 {similar.map(({ job: other }) => (
                   <a
                     key={other.id}
-                    href={`/viec/${other.id}${fromField ? '?tu=nganh' : ''}`}
+                    href={wsHref(ws, `/viec/${other.id}${fromField ? '?tu=nganh' : ''}`)}
                     className="jrow border-t border-divider px-2 py-3 text-text hover:text-text"
                   >
                     <span className="mb-0.75 block text-sm font-extrabold">{other.title}</span>

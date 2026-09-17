@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { db } from '@/api/db';
+import { getDb } from '@/api/workspace-db';
 import { SAVED_JOB_LIMIT } from '@/constants/saved';
+import { isWorkspaceId } from '@/constants/workspace';
 import { assertCanEdit } from '@/lib/edit-access';
 
 /**
@@ -17,6 +18,12 @@ import { assertCanEdit } from '@/lib/edit-access';
  */
 export async function toggleSavedJob(formData: FormData): Promise<void> {
   await assertCanEdit();
+
+  // Số hiệu tin chỉ có nghĩa trong CSDL của workspace — không có `ws` hợp lệ
+  // thì không đoán, bỏ qua.
+  const ws = formData.get('ws');
+  if (!isWorkspaceId(ws)) return;
+  const db = getDb(ws);
 
   const postingId = Number(formData.get('postingId'));
   if (!Number.isInteger(postingId) || postingId <= 0) return;

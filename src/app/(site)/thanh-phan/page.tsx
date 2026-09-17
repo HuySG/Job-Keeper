@@ -6,6 +6,8 @@ import { Mascot } from '@/components/ui/mascot';
 import { Kicker } from '@/components/ui/stat';
 import { THEMES } from '@/constants/appearance';
 import { getAppearance } from '@/lib/appearance';
+import { wsHref } from '@/lib/workspace-path';
+import { currentWorkspace } from '@/lib/workspace-route';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +24,8 @@ export const metadata = { title: 'Bộ thành phần' };
  * nhìn thấy tác dụng của chúng rõ nhất.
  */
 export default async function ComponentsPage() {
-  const appearance = await getAppearance();
+  const ws = await currentWorkspace();
+  const appearance = await getAppearance(ws);
   const theme = THEMES.find((item) => item.value === appearance.theme) ?? THEMES[0];
 
   return (
@@ -38,7 +41,7 @@ export default async function ComponentsPage() {
           <div className="mt-5 flex flex-wrap gap-2.5">
             <ReplayButton />
             <a
-              href="/nganh"
+              href={wsHref(ws, '/nganh')}
               className="btn btn-secondary h-11 border-accent-700 px-4.5 text-accent-800 hover:text-accent-800"
             >
               Về app
@@ -49,7 +52,7 @@ export default async function ComponentsPage() {
       </section>
 
       <div className="border-b-2 border-divider px-4 py-5 sm:px-6">
-        <AppearanceForm appearance={appearance} />
+        <AppearanceForm appearance={appearance} ws={ws} />
       </div>
 
       <ComponentGallery brand={{ label: theme.label, swatch: theme.swatch }} />

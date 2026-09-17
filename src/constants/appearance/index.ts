@@ -7,7 +7,16 @@
  * dương — đúng kiểu nháy màu làm người ta tưởng trang lỗi.
  */
 
-export const THEME_COOKIE = 'bj-theme';
+import { DEFAULT_WORKSPACE, type WorkspaceId } from '@/constants/workspace';
+
+/**
+ * Cookie bảng màu — MỖI WORKSPACE MỘT CÁI, để nhìn màu là biết đang ở CSDL nào
+ * (docs/plan-swe.md §6). Workspace mặc định giữ nguyên tên cũ `bj-theme`: lựa
+ * chọn đã lưu trước ngày tách không mất.
+ */
+export function themeCookie(ws: WorkspaceId): string {
+  return ws === DEFAULT_WORKSPACE ? 'bj-theme' : `bj-theme-${ws}`;
+}
 export const MOTION_COOKIE = 'bj-motion';
 
 export const THEMES = [

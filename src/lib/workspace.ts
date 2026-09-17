@@ -115,7 +115,18 @@ export function describeDatabase(url: string): string {
  */
 export function planWorkspace(argv: readonly string[], env: Env): WorkspacePlan {
   const ws = readWorkspaceId(argv, env);
+  const resolved = assertDistinctDatabases(env);
+  const own = resolved[ws];
+  return { ws, databaseUrl: own?.url ?? null, databaseUrlFrom: own?.from ?? null };
+}
 
+/**
+ * Chuỗi kết nối của MỌI workspace, sau khi chắc chắn không hai workspace nào
+ * trỏ cùng một CSDL. Dùng cho cả script (`planWorkspace`) lẫn web (`getDb`).
+ */
+export function assertDistinctDatabases(
+  env: Env,
+): Record<WorkspaceId, ReturnType<typeof resolveDatabaseUrl>> {
   const resolved = Object.fromEntries(
     WORKSPACE_IDS.map((id) => [id, resolveDatabaseUrl(id, env)]),
   ) as Record<WorkspaceId, ReturnType<typeof resolveDatabaseUrl>>;
@@ -135,9 +146,7 @@ export function planWorkspace(argv: readonly string[], env: Env): WorkspacePlan 
     }
     seen.set(identity, id);
   }
-
-  const own = resolved[ws];
-  return { ws, databaseUrl: own?.url ?? null, databaseUrlFrom: own?.from ?? null };
+  return resolved;
 }
 
 /**

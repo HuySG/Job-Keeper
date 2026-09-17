@@ -1,6 +1,7 @@
 import { setAppearance } from '@/actions/appearance';
 import { cx } from '@/components/ui/tone';
 import { THEMES, type Appearance } from '@/constants/appearance';
+import type { WorkspaceId } from '@/constants/workspace';
 
 /**
  * Hai công tắc giao diện — bảng màu và chuyển động — của MÁY ĐANG XEM.
@@ -8,12 +9,14 @@ import { THEMES, type Appearance } from '@/constants/appearance';
  * Mỗi nút là một `<form>` gọi server action đặt cookie, nên đổi được cả khi
  * JavaScript chưa tải. Không cần khoá sửa: không có gì ghi vào CSDL.
  */
-export function AppearanceForm({ appearance }: { appearance: Appearance }) {
+export function AppearanceForm({ appearance, ws }: { appearance: Appearance; ws: WorkspaceId }) {
   return (
     <div className="flex flex-col gap-3">
       <h6>Giao diện trên máy này</h6>
 
       <form action={setAppearance} className="seg w-fit" aria-label="Bảng màu">
+        {/* Bảng màu lưu theo workspace — nhìn màu là biết đang ở CSDL nào. */}
+        <input type="hidden" name="ws" value={ws} />
         {THEMES.map((theme) => (
           <button
             key={theme.value}

@@ -1,18 +1,18 @@
 import type { ReactNode } from 'react';
 
-import { SiteHeader } from '@/components/layout/site-header';
-
 /**
  * Khung chung của MỌI trang: một tờ giấy kem rộng tối đa 1440px, đổ bóng nhẹ,
  * nằm trên nền pastel.
  *
  * `(site)` là **route group** — cặp ngoặc khiến Next bỏ đoạn này khỏi đường
- * dẫn, nên `/`, `/viec`, `/nganh`… giữ nguyên URL cũ.
+ * dẫn. Trang của từng workspace nằm dưới `[ws]/` (`/bae/nganh`, `/swe/viec`),
+ * trang dùng chung (`/thanh-phan`) nằm ngay đây.
  *
- * Vì sao khung nằm ở đây chứ không ở `app/layout.tsx`: `SiteHeader` đọc CSDL.
- * Error boundary của Next chỉ bắt lỗi của các tầng BÊN DƯỚI nó, nên nếu khung
- * nằm ở layout gốc thì lần Neon ngủ quên đầu tiên sẽ cho ra một trang trắng
- * thay vì màn hình "thử lại" ở `app/error.tsx`.
+ * Thanh điều hướng KHÔNG nằm ở đây từ khi có hai workspace: nó cần biết
+ * workspace, nên nằm ở `[ws]/layout.tsx` và `thanh-phan/layout.tsx`. Vẫn giữ
+ * ngoài `app/layout.tsx` vì `SiteHeader` đọc CSDL — error boundary của Next chỉ
+ * bắt lỗi của các tầng BÊN DƯỚI nó, nên nếu nó nằm ở layout gốc thì lần Neon
+ * ngủ quên đầu tiên sẽ cho ra một trang trắng thay vì màn hình "thử lại".
  *
  * Chiều rộng chặn ở 1440px: thả tự do trên màn 2560px thì dòng tiêu đề tin dài
  * tới mức mắt không bắt được đầu dòng sau.
@@ -35,8 +35,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
   return (
     <div className="pb-12">
       <div className="mx-auto min-h-screen max-w-360 bg-bg shadow-md">
-        <SiteHeader />
-        <main className="min-w-0">{children}</main>
+        {children}
       </div>
     </div>
   );

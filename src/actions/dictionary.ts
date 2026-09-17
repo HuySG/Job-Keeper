@@ -3,11 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { db } from '@/api/db';
-import { DEFAULT_FIELD_SLUG } from '@/constants/field';
+import { getDb } from '@/api/workspace-db';
+import { WORKSPACES, isWorkspaceId } from '@/constants/workspace';
 import { assertCanEdit } from '@/lib/edit-access';
 import { applyDraft, draftHref, isGray, readDraftOps } from '@/lib/field-draft';
 import type { SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
 
 /**
  * Ghi bản nháp từ điển vào `SavedFilter`.
@@ -23,8 +24,14 @@ import type { SearchParams } from '@/lib/query';
 export async function saveDictionary(formData: FormData): Promise<void> {
   await assertCanEdit();
 
-  const slug = String(formData.get('f') ?? '').trim() || DEFAULT_FIELD_SLUG;
-  const fieldParam = slug === DEFAULT_FIELD_SLUG ? undefined : slug;
+  const ws = formData.get('ws');
+  if (!isWorkspaceId(ws)) throw new Error('Thiếu workspace của từ điển.');
+  const db = getDb(ws);
+  const defaultField = WORKSPACES[ws].defaultField;
+  const settingsPath = wsHref(ws, '/cai-dat');
+
+  const slug = String(formData.get('f') ?? '').trim() || defaultField;
+  const fieldParam = slug === defaultField ? undefined : slug;
 
   const params: SearchParams = {};
   for (const [key, value] of formData.entries()) {
@@ -41,7 +48,7 @@ export async function saveDictionary(formData: FormData): Promise<void> {
   // Không từ chắc nào thì ngành rỗng tuếch: từ xám không bao giờ tự kéo tin
   // vào. Chặn lại thay vì lưu một từ điển chắc chắn ra 0 tin.
   if (!draft.keywords.some((raw) => !isGray(raw))) {
-    const back = draftHref('/cai-dat', row, draft, fieldParam);
+    const back = draftHref(settingsPath, row, draft, fieldParam);
     redirect(`${back}${back.includes('?') ? '&' : '?'}loi=trong`);
   }
 
@@ -64,5 +71,9 @@ export async function saveDictionary(formData: FormData): Promise<void> {
   });
 
   revalidatePath('/', 'layout');
-  redirect(fieldParam ? `/cai-dat?f=${encodeURIComponent(fieldParam)}&da-luu=1` : '/cai-dat?da-luu=1');
+  redirect(
+    fieldParam
+      ? `${settingsPath}?f=${encodeURIComponent(fieldParam)}&da-luu=1`
+      : `${settingsPath}?da-luu=1`,
+  );
 }

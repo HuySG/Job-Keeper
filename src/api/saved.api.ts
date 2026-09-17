@@ -3,9 +3,10 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import { cache } from 'react';
 
-import { db } from '@/api/db';
 import { LIST_INCLUDE, type JobListItem } from '@/api/job.api';
+import { getDb } from '@/api/workspace-db';
 import { SAVED_JOB_LIMIT } from '@/constants/saved';
+import type { WorkspaceId } from '@/constants/workspace';
 import { getEditAccess } from '@/lib/edit-access';
 
 /**
@@ -36,7 +37,8 @@ function isMissingTable(error: unknown): boolean {
 }
 
 /** Bọc `cache()`: khung ngoài và thân trang cùng hỏi trong một lượt tải. */
-export const getSavedState = cache(async (): Promise<SavedState> => {
+export const getSavedState = cache(async (ws: WorkspaceId): Promise<SavedState> => {
+  const db = getDb(ws);
   try {
     const rows = await db.savedJob.findMany({ select: { postingId: true } });
     return { ids: new Set(rows.map((row) => row.postingId)), count: rows.length, ready: true };
@@ -53,8 +55,9 @@ export interface SavedEntry {
 }
 
 /** Tin đã lưu, mới lưu lên trước. Kể cả tin sàn đã đóng — xem trang `/da-luu`. */
-export async function listSavedJobs(): Promise<SavedEntry[]> {
-  const { ready } = await getSavedState();
+export async function listSavedJobs(ws: WorkspaceId): Promise<SavedEntry[]> {
+  const db = getDb(ws);
+  const { ready } = await getSavedState(ws);
   if (!ready) return [];
 
   const rows = await db.savedJob.findMany({
@@ -70,6 +73,8 @@ export async function listSavedJobs(): Promise<SavedEntry[]> {
  * Một trang Kho tin vẽ 20 nút; hỏi quyền sửa và đếm trần 20 lần là phí.
  */
 export interface SaveContext {
+  /** Workspace của các tin — nút lưu gửi kèm để server action ghi đúng CSDL. */
+  ws: WorkspaceId;
   ids: ReadonlySet<number>;
   count: number;
   /** Nút có hiện không — ẩn hẳn khi bảng chưa có, vì bấm vào chắc chắn hỏng. */
@@ -81,8 +86,8 @@ export interface SaveContext {
   reason: string | null;
 }
 
-export const getSaveContext = cache(async (): Promise<SaveContext> => {
-  const [state, access] = await Promise.all([getSavedState(), getEditAccess()]);
+export const getSaveContext = cache(async (ws: WorkspaceId): Promise<SaveContext> => {
+  const [state, access] = await Promise.all([getSavedState(ws), getEditAccess()]);
   const full = state.count >= SAVED_JOB_LIMIT;
 
   const reason = !access.allowed
@@ -94,6 +99,7 @@ export const getSaveContext = cache(async (): Promise<SaveContext> => {
       : null;
 
   return {
+    ws,
     ids: state.ids,
     count: state.count,
     visible: state.ready,

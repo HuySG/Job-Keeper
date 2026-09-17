@@ -20,7 +20,7 @@ import { LiveDot } from '@/components/ui/status';
 import { Mascot } from '@/components/ui/mascot';
 import { Kicker } from '@/components/ui/stat';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG } from '@/constants/field';
+import { WORKSPACES } from '@/constants/workspace';
 import { getAppearance } from '@/lib/appearance';
 import { getEditAccess } from '@/lib/edit-access';
 import {
@@ -43,13 +43,14 @@ import {
   type DraftOps,
 } from '@/lib/field-draft';
 import { readParam, type SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import { formatCount, formatDateTime, formatPercent } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Cài đặt ngành' };
 
-const PATH = '/cai-dat';
 
 /**
  * Cài đặt — "Dạy mèo biết ngành của bạn".
@@ -71,22 +72,31 @@ const PATH = '/cai-dat';
  * để xem màn rỗng; ở app thật màn đó tự hiện ở trang Ngành khi lọc ra 0 tin,
  * nên chỗ đó dành cho "Bỏ thay đổi".
  */
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function SettingsPage({
+  params: routeParams,
+  searchParams,
+}: {
+  params: Promise<{ ws: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
+  const ws = await workspaceParam(routeParams);
+  const PATH = wsHref(ws, '/cai-dat');
+  const defaultField = WORKSPACES[ws].defaultField;
   const params = await searchParams;
-  const slug = readParam(params, 'f') ?? DEFAULT_FIELD_SLUG;
-  const fieldParam = slug === DEFAULT_FIELD_SLUG ? undefined : slug;
+  const slug = readParam(params, 'f') ?? defaultField;
+  const fieldParam = slug === defaultField ? undefined : slug;
 
   const [definition, fields, access, appearance] = await Promise.all([
-    getFieldDefinition(slug),
-    listFields(),
+    getFieldDefinition(ws, slug),
+    listFields(ws),
     getEditAccess(),
-    getAppearance(),
+    getAppearance(ws),
   ]);
 
   if (!definition) {
     return (
       <Empty title={`Chưa có ngành “${slug}”`}>
-        Chạy <Cmd>npm run db:seed</Cmd> để nạp ngành mẫu, rồi quay lại đây để dạy mèo.
+        Chạy <Cmd>npm run db:seed -- --ws {ws}</Cmd> để nạp ngành mẫu, rồi quay lại đây để dạy mèo.
       </Empty>
     );
   }
@@ -103,8 +113,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     scoreField(draftDefinition),
     dirty ? scoreField(definition) : null,
     dictionaryReport(draftDefinition),
-    getProvinceNames(draft.provinces),
-    getTopProvinces(8),
+    getProvinceNames(ws, draft.provinces),
+    getTopProvinces(ws, 8),
   ]);
 
   const href = (next: Dictionary) => draftHref(PATH, saved, next, fieldParam);
@@ -141,7 +151,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               {fields.map((field) => (
                 <a
                   key={field.slug}
-                  href={field.slug === DEFAULT_FIELD_SLUG ? PATH : `${PATH}?f=${encodeURIComponent(field.slug)}`}
+                  href={field.slug === defaultField ? PATH : `${PATH}?f=${encodeURIComponent(field.slug)}`}
                   aria-current={field.slug === slug ? 'true' : undefined}
                   className="seg-opt"
                 >
@@ -323,6 +333,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
             <form action={saveDictionary} className="flex flex-col gap-2.5">
               {hidden}
+              <input type="hidden" name="ws" value={ws} />
               {!fieldParam && <input type="hidden" name="f" value={slug} />}
               <button
                 type="submit"
@@ -349,7 +360,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </a>
               ) : (
                 <a
-                  href={fieldParam ? `/nganh?f=${encodeURIComponent(fieldParam)}` : '/nganh'}
+                  href={wsHref(ws, fieldParam ? `/nganh?f=${encodeURIComponent(fieldParam)}` : '/nganh')}
                   className="btn btn-secondary btn-block border-neutral-600 text-[13px] text-neutral-100 hover:text-neutral-100"
                 >
                   Xem danh sách ngành
@@ -379,7 +390,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </Callout>
 
           <hr className="hr" />
-          <AppearanceForm appearance={appearance} />
+          <AppearanceForm appearance={appearance} ws={ws} />
         </aside>
       </div>
     </>

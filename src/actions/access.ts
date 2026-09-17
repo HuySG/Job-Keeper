@@ -13,7 +13,8 @@ import { lockEditing, unlockWith } from '@/lib/edit-access';
  */
 function safeBack(value: FormDataEntryValue | null): URL {
   const raw = typeof value === 'string' ? value : '';
-  const path = raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') ? raw : '/cai-dat';
+  // Mặc định `/` — middleware đưa về workspace vừa xem.
+  const path = raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') ? raw : '/';
   const url = new URL(path, 'http://local');
   url.searchParams.delete('khoa');
   return url;

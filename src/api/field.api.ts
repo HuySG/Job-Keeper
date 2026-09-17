@@ -2,9 +2,10 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { db } from '@/api/db';
 import { LIST_INCLUDE, PAGE_SIZE, type JobListItem } from '@/api/job.api';
+import { getDb } from '@/api/workspace-db';
 import { FRESH_CHECK_HOURS } from '@/constants/field';
+import type { WorkspaceId } from '@/constants/workspace';
 import { JobStatus, SaturdayWork } from '@/enums';
 import {
   EXPERIENCE_BANDS,
@@ -71,6 +72,7 @@ export interface Facet {
 }
 
 export interface FieldPage {
+  ws: WorkspaceId;
   slug: string;
   name: string;
   keywordCount: number;
@@ -244,6 +246,11 @@ export interface FieldQuery {
  * hai con số lệch nhau, và "xem trước 318 tin" thành lời nói dối.
  */
 export interface FieldDefinition {
+  /**
+   * CSDL chứa ngành này. Định nghĩa tự mang theo workspace, nên mọi hàm chấm
+   * — kể cả chấm bản NHÁP dựng từ URL — đọc đúng CSDL mà không phải truyền thêm.
+   */
+  ws: WorkspaceId;
   slug: string;
   name: string;
   keywords: readonly string[];
@@ -260,10 +267,12 @@ export interface FieldDefinition {
  * Bọc `cache()`: một lượt tải trang Kho tin hay Chi tiết hỏi định nghĩa ngành
  * hai, ba lần (khung ngoài, bảng tin, tin tương tự).
  */
-export const getFieldDefinition = cache(async (slug: string): Promise<FieldDefinition | null> => {
-  const row = await db.savedFilter.findUnique({ where: { slug } });
+export const getFieldDefinition = cache(
+  async (ws: WorkspaceId, slug: string): Promise<FieldDefinition | null> => {
+  const row = await getDb(ws).savedFilter.findUnique({ where: { slug } });
   if (!row) return null;
   return {
+    ws,
     slug: row.slug,
     name: row.name,
     keywords: row.keywords,
@@ -274,7 +283,8 @@ export const getFieldDefinition = cache(async (slug: string): Promise<FieldDefin
     matchKey: matchKeyOf(row.profile),
     updatedAt: row.updatedAt,
   };
-});
+  },
+);
 
 /**
  * Tin còn sống trong PHẠM VI của một ngành (tỉnh, cấp bậc, tuổi tin).
@@ -284,7 +294,7 @@ export const getFieldDefinition = cache(async (slug: string): Promise<FieldDefin
  * đặt chấm bản đã lưu, bản nháp VÀ dựng báo cáo từng từ — cùng một phạm vi thì
  * chỉ đọc CSDL một lần.
  */
-const loadCandidates = cache(async (scopeKey: string) => {
+const loadCandidates = cache(async (ws: WorkspaceId, scopeKey: string) => {
   const scope = JSON.parse(scopeKey) as {
     provinces: string[];
     levels: string[];
@@ -294,7 +304,7 @@ const loadCandidates = cache(async (scopeKey: string) => {
     ? new Date(Date.now() - scope.maxAgeDays * 24 * 60 * 60 * 1000)
     : null;
 
-  return db.jobPosting.findMany({
+  return getDb(ws).jobPosting.findMany({
     where: {
       status: { in: ALIVE },
       ...(scope.provinces.length
@@ -310,6 +320,7 @@ const loadCandidates = cache(async (scopeKey: string) => {
 
 function candidatesFor(definition: FieldDefinition) {
   return loadCandidates(
+    definition.ws,
     JSON.stringify({
       provinces: [...definition.provinces].sort(),
       levels: [...definition.levels].sort(),
@@ -324,9 +335,12 @@ function candidatesFor(definition: FieldDefinition) {
  * Slug nào chưa có trong bảng Location thì giữ nguyên slug — thà hiện một
  * chuỗi xấu còn hơn nuốt mất cả tỉnh khỏi dòng "phạm vi".
  */
-export async function getProvinceNames(slugs: readonly string[]): Promise<string[]> {
+export async function getProvinceNames(
+  ws: WorkspaceId,
+  slugs: readonly string[],
+): Promise<string[]> {
   if (slugs.length === 0) return [];
-  const rows = await db.location.findMany({
+  const rows = await getDb(ws).location.findMany({
     where: { slug: { in: [...slugs] } },
     select: { slug: true, name: true },
   });
@@ -335,10 +349,11 @@ export async function getProvinceNames(slugs: readonly string[]): Promise<string
 }
 
 export async function findFieldJobs(
+  ws: WorkspaceId,
   slug: string,
   query: FieldQuery = {},
 ): Promise<FieldPage | null> {
-  const definition = await getFieldDefinition(slug);
+  const definition = await getFieldDefinition(ws, slug);
   return definition ? scoreField(definition, query) : null;
 }
 
@@ -349,7 +364,7 @@ export async function scoreField(
 ): Promise<FieldPage> {
   const [candidates, provinceNames] = await Promise.all([
     candidatesFor(definition),
-    getProvinceNames(definition.provinces),
+    getProvinceNames(definition.ws, definition.provinces),
   ]);
 
   const field = compileField(
@@ -485,6 +500,7 @@ export async function scoreField(
   };
 
   return {
+    ws: definition.ws,
     slug: definition.slug,
     name: definition.name,
     keywordCount: definition.keywords.length,
@@ -684,8 +700,8 @@ function countBy(
 }
 
 /** Danh sách ngành đã định nghĩa, cho ô chọn ở đầu trang. */
-export async function listFields(): Promise<{ slug: string; name: string }[]> {
-  return db.savedFilter.findMany({
+export async function listFields(ws: WorkspaceId): Promise<{ slug: string; name: string }[]> {
+  return getDb(ws).savedFilter.findMany({
     select: { slug: true, name: true },
     orderBy: { slug: 'asc' },
   });

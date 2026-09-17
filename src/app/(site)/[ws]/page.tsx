@@ -7,8 +7,11 @@ import { Glyph } from '@/components/ui/glyph';
 import { Mascot } from '@/components/ui/mascot';
 import { Kicker, StatCell, StatStrip } from '@/components/ui/stat';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG, FRESH_CHECK_HOURS } from '@/constants/field';
+import { FRESH_CHECK_HOURS } from '@/constants/field';
+import { WORKSPACES } from '@/constants/workspace';
 import { salaryValue } from '@/lib/field-bands';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import {
   formatCount,
   formatPercent,
@@ -42,11 +45,12 @@ export const metadata = { title: 'Tổng quan' };
  * Biểu đồ trạng thái, nhịp tin theo ngày, sức khoẻ bóc tách — những thứ bản
  * trước để ở đây — là việc của trang Nguồn & vận hành.
  */
-export default async function OverviewPage() {
+export default async function OverviewPage({ params }: { params: Promise<{ ws: string }> }) {
+  const ws = await workspaceParam(params);
   const [overview, field, activeSources] = await Promise.all([
-    getOverview(),
-    findFieldJobs(DEFAULT_FIELD_SLUG),
-    getActiveSources(),
+    getOverview(ws),
+    findFieldJobs(ws, WORKSPACES[ws].defaultField),
+    getActiveSources(ws),
   ]);
 
   const freshness = freshnessMeta(overview.lastCrawledAt);
@@ -60,7 +64,7 @@ export default async function OverviewPage() {
     return (
       <Empty title="Kho chưa có tin nào còn hiệu lực">
         Mọi con số ở đây tính từ CSDL, nên trước khi crawler chạy lần đầu thì chưa có gì để nói. Chạy{' '}
-        <Cmd>npm run crawl -- --source vnw --full</Cmd> để mèo đi gom tin.
+        <Cmd>npm run crawl -- --ws {ws} --full</Cmd> để mèo đi gom tin.
       </Empty>
     );
   }
@@ -92,11 +96,11 @@ export default async function OverviewPage() {
             loại tin hết hạn. Bạn chỉ cần chọn tin và bấm sang bản gốc.
           </p>
           <div className="flex flex-wrap gap-2.5">
-            <a href="/nganh" className="btn btn-primary h-11.5 gap-2 px-5">
+            <a href={wsHref(ws, '/nganh')} className="btn btn-primary h-11.5 gap-2 px-5">
               Vào ngành của tôi
               <Glyph name="arrowRight" size={16} strokeWidth={1.9} />
             </a>
-            <a href="/viec" className="btn btn-secondary h-11.5 px-5">
+            <a href={wsHref(ws, '/viec')} className="btn btn-secondary h-11.5 px-5">
               Xem toàn bộ kho tin
             </a>
           </div>
@@ -166,7 +170,7 @@ export default async function OverviewPage() {
                 return (
                   <a
                     key={job.id}
-                    href={`/viec/${job.id}?tu=nganh`}
+                    href={wsHref(ws, `/viec/${job.id}?tu=nganh`)}
                     className="jrow flex items-baseline gap-3.5 border-t border-divider px-2.5 py-3.5 text-text hover:text-text"
                   >
                     <span
@@ -193,7 +197,7 @@ export default async function OverviewPage() {
             </div>
           )}
           {field && field.total > latest.length && (
-            <a href="/nganh" className="btn btn-ghost mt-3.5 gap-1.75 text-[13px]">
+            <a href={wsHref(ws, '/nganh')} className="btn btn-ghost mt-3.5 gap-1.75 text-[13px]">
               Xem cả {formatCount(field.total)} tin
               <Glyph name="arrowRight" size={14} strokeWidth={1.9} />
             </a>
@@ -233,7 +237,7 @@ export default async function OverviewPage() {
               {silent.length === 0
                 ? `Cả ${activeSources.length} sàn đang bật đều trả tin cho ngành này.`
                 : `Chỉ ${sourceRows.length}/${activeSources.length} sàn đang trả tin cho ngành này.`}{' '}
-              <a href="/nguon" className="underline">
+              <a href={wsHref(ws, '/nguon')} className="underline">
                 Xem vận hành
               </a>
             </p>

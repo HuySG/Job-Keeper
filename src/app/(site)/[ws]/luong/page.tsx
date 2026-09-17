@@ -5,9 +5,11 @@ import { Cmd, Empty } from '@/components/ui/empty';
 import { Mascot } from '@/components/ui/mascot';
 import { Figure, Kicker } from '@/components/ui/stat';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG } from '@/constants/field';
+import { WORKSPACES } from '@/constants/workspace';
 import { FACET_NONE } from '@/lib/field-bands';
 import { buildUrl } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import { formatCount, formatPercent, millions } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
@@ -34,13 +36,14 @@ export const metadata = { title: 'Lương' };
  * Mọi con số đi kèm cỡ mẫu. Một trung vị không có n bên cạnh là con số không
  * kiểm chứng được — và với vài chục tin thì nó lệch rất xa.
  */
-export default async function SalaryPage() {
-  const field = await findFieldJobs(DEFAULT_FIELD_SLUG);
+export default async function SalaryPage({ params }: { params: Promise<{ ws: string }> }) {
+  const ws = await workspaceParam(params);
+  const field = await findFieldJobs(ws, WORKSPACES[ws].defaultField);
 
   if (!field) {
     return (
       <Empty title="Chưa có ngành nào để tính lương">
-        Trang này tính lương trên đúng ngành của bạn. Chạy <Cmd>npm run db:seed</Cmd> để nạp ngành
+        Trang này tính lương trên đúng ngành của bạn. Chạy <Cmd>npm run db:seed -- --ws {ws}</Cmd> để nạp ngành
         mẫu, hoặc định nghĩa ngành ở trang Cài đặt.
       </Empty>
     );
@@ -109,7 +112,7 @@ export default async function SalaryPage() {
                 return (
                   <a
                     key={band.value}
-                    href={buildUrl('/nganh', {}, { luong: [band.value] })}
+                    href={buildUrl(wsHref(ws, '/nganh'), {}, { luong: [band.value] })}
                     title={`Lọc danh sách ngành theo mức ${band.label}`}
                     className="fopt -mx-2 px-2 py-0.5 text-text hover:text-text"
                   >

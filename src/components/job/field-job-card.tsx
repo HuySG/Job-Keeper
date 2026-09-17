@@ -5,7 +5,9 @@ import type { SaveContext } from '@/api/saved.api';
 import { Glyph, type GlyphName } from '@/components/ui/glyph';
 import { CheckedLabel } from '@/components/ui/status';
 import { cx } from '@/components/ui/tone';
+import type { WorkspaceId } from '@/constants/workspace';
 import { salaryValue } from '@/lib/field-bands';
+import { wsHref } from '@/lib/workspace-path';
 import { daysLeft, employmentLabel, formatSalary, levelLabel, millions, timeAgo } from '@/utils/format';
 
 import { SaveJobButton } from './save-button';
@@ -32,12 +34,14 @@ import { SaveJobButton } from './save-button';
  * tin. Màu là kênh phụ — nhãn "Cần soi tay" mới là kênh chính.
  */
 export function FieldJobCard({
+  ws,
   row,
   fieldMedian,
   save,
   anchor,
   delay = 0,
 }: {
+  ws: WorkspaceId;
   row: FieldMatchedJob;
   /** Trung vị lương của tập đang xem — để tin "Thoả thuận" có một mốc so. */
   fieldMedian: number | null;
@@ -103,7 +107,7 @@ export function FieldJobCard({
           </div>
 
           <h4 className="text-[20px] leading-[1.18] text-pretty sm:text-[22px]">
-            <a href={`/viec/${job.id}?tu=nganh`} className="text-text hover:text-accent-700">
+            <a href={wsHref(ws, `/viec/${job.id}?tu=nganh`)} className="text-text hover:text-accent-700">
               {job.title}
             </a>
           </h4>

@@ -3,7 +3,8 @@ import 'server-only';
 import { Prisma } from '@prisma/client';
 import { cache } from 'react';
 
-import { db } from '@/api/db';
+import { getDb } from '@/api/workspace-db';
+import type { WorkspaceId } from '@/constants/workspace';
 import { JobStatus } from '@/enums';
 
 /**
@@ -78,7 +79,8 @@ export interface Overview {
  * MỘT request, nên lần gọi thứ hai lấy lại kết quả cũ — và vẫn là dữ liệu tươi
  * cho lượt truy cập kế tiếp, khác hẳn với việc nhớ theo thời gian.
  */
-export const getOverview = cache(async (): Promise<Overview> => {
+export const getOverview = cache(async (ws: WorkspaceId): Promise<Overview> => {
+  const db = getDb(ws);
   const day = 24 * 60 * 60 * 1000;
   const now = Date.now();
   const startOfToday = new Date();
@@ -153,7 +155,8 @@ export interface DayCount {
  * Ngày trống phải hiện thành cột 0 chứ không được bỏ qua — bỏ qua thì một tuần
  * crawler chết trông y hệt một tuần bình thường, chỉ hẹp hơn.
  */
-export async function getDailyIntake(days = 30): Promise<DayCount[]> {
+export async function getDailyIntake(ws: WorkspaceId, days = 30): Promise<DayCount[]> {
+  const db = getDb(ws);
   const span = Math.max(1, Math.min(180, Math.trunc(days)));
 
   return db.$queryRaw<DayCount[]>`
@@ -217,7 +220,8 @@ export interface SalaryBand {
  * không nói được vì sao. Ở quy mô vài chục nghìn tin, tính thẳng vẫn nằm dưới
  * một nhịp mắt, và luôn khớp với thứ đang thật sự nằm trong kho.
  */
-export async function getSalaryByLevel(): Promise<SalaryBand[]> {
+export async function getSalaryByLevel(ws: WorkspaceId): Promise<SalaryBand[]> {
+  const db = getDb(ws);
   const [rows, totals] = await Promise.all([
     db.$queryRaw<{ key: string; sample: number; p25: number; median: number; p75: number }[]>`
       SELECT
@@ -259,7 +263,8 @@ export async function getSalaryByLevel(): Promise<SalaryBand[]> {
  * Trả `null` khi chưa có tin nào ghi lương, chứ không trả 0. "Trung vị 0 đồng"
  * là một khẳng định sai; "chưa đủ dữ liệu" mới là sự thật.
  */
-export async function getSalaryOverall(): Promise<Omit<SalaryBand, 'key' | 'name'> | null> {
+export async function getSalaryOverall(ws: WorkspaceId): Promise<Omit<SalaryBand, 'key' | 'name'> | null> {
+  const db = getDb(ws);
   const rows = await db.$queryRaw<
     { sample: number; p25: number; median: number; p75: number }[]
   >`
@@ -285,7 +290,8 @@ export async function getSalaryOverall(): Promise<Omit<SalaryBand, 'key' | 'name
 
 
 /** Phân vị lương theo tỉnh/thành, xếp theo nơi nhiều tin nhất. */
-export async function getSalaryByProvince(limit = 8): Promise<SalaryBand[]> {
+export async function getSalaryByProvince(ws: WorkspaceId, limit = 8): Promise<SalaryBand[]> {
+  const db = getDb(ws);
   const take = Math.max(1, Math.min(34, Math.trunc(limit)));
 
   return db.$queryRaw<SalaryBand[]>`
@@ -326,9 +332,11 @@ export interface SalaryBucket {
  * thưa — để nguyên thì hai chục cột cuối đều cao một pixel, đọc không ra gì.
  */
 export async function getSalaryHistogram(
+  ws: WorkspaceId,
   bucketSize = 5_000_000,
   cap = 60_000_000,
 ): Promise<SalaryBucket[]> {
+  const db = getDb(ws);
   const rows = await db.$queryRaw<{ floor: number; count: number }[]>`
     SELECT
       LEAST(
@@ -369,7 +377,8 @@ export interface RankRow {
 }
 
 /** Tỉnh/thành nhiều tin nhất, kèm tỷ lệ dám ghi lương của từng nơi. */
-export async function getTopProvinces(limit = 8): Promise<RankRow[]> {
+export async function getTopProvinces(ws: WorkspaceId, limit = 8): Promise<RankRow[]> {
+  const db = getDb(ws);
   const take = Math.max(1, Math.min(34, Math.trunc(limit)));
 
   return db.$queryRaw<RankRow[]>`
@@ -389,7 +398,8 @@ export async function getTopProvinces(limit = 8): Promise<RankRow[]> {
 }
 
 /** Công ty đăng nhiều tin nhất. Đăng dày bất thường tự nó cũng là một tín hiệu. */
-export async function getTopCompanies(limit = 8): Promise<RankRow[]> {
+export async function getTopCompanies(ws: WorkspaceId, limit = 8): Promise<RankRow[]> {
+  const db = getDb(ws);
   const take = Math.max(1, Math.min(50, Math.trunc(limit)));
 
   return db.$queryRaw<RankRow[]>`
@@ -408,7 +418,8 @@ export async function getTopCompanies(limit = 8): Promise<RankRow[]> {
 }
 
 /** Cấp bậc — để đối chiếu với biểu đồ lương theo cấp bậc đứng cạnh nó. */
-export async function getLevelSpread(): Promise<RankRow[]> {
+export async function getLevelSpread(ws: WorkspaceId): Promise<RankRow[]> {
+  const db = getDb(ws);
   return db.$queryRaw<RankRow[]>`
     SELECT
       COALESCE("level", 'UNKNOWN') AS key,

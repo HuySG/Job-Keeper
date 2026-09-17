@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 
 import { cx } from '@/components/ui/tone';
 import { NAV, isActivePath } from '@/constants/nav';
+import { WORKSPACES, WORKSPACE_IDS, type WorkspaceId } from '@/constants/workspace';
+import { pathWithinWorkspace, wsHref } from '@/lib/workspace-path';
 
 /**
  * Liên kết của thanh điều hướng ngang.
@@ -16,8 +18,11 @@ import { NAV, isActivePath } from '@/constants/nav';
  * Mục đang mở được đánh dấu bằng BA kênh cùng lúc — chữ accent, nét 800, và
  * gạch chân 2px. Chỉ đổi màu thì người mù màu mất dấu hoàn toàn, chỉ đổi nét
  * đậm thì ở cỡ 14px gần như không thấy.
+ *
+ * Mọi đường dẫn mang tiền tố workspace (`/bae/nganh`); mục "Ngành" lấy nhãn
+ * của workspace — "Ngành của Bae" hay "Ngành của tôi".
  */
-export function TopNavLinks() {
+export function TopNavLinks({ ws }: { ws: WorkspaceId }) {
   const pathname = usePathname();
 
   return (
@@ -28,11 +33,13 @@ export function TopNavLinks() {
       className="no-scrollbar order-last -mx-1 flex w-full gap-5 overflow-x-auto px-1 text-sm lg:order-none lg:mx-0 lg:mr-auto lg:w-auto lg:flex-wrap lg:overflow-visible lg:px-0"
     >
       {NAV.map((item) => {
-        const active = isActivePath(item.href, pathname);
+        const href = wsHref(ws, item.href);
+        const active = isActivePath(href, pathname, item.href === '/');
+        const label = item.href === '/nganh' ? WORKSPACES[ws].label : item.label;
         return (
           <a
             key={item.href}
-            href={item.href}
+            href={href}
             aria-current={active ? 'page' : undefined}
             title={item.question}
             className={cx(
@@ -42,10 +49,39 @@ export function TopNavLinks() {
                 : 'border-transparent text-neutral-700 hover:text-accent',
             )}
           >
-            {item.label}
+            {label}
           </a>
         );
       })}
+    </nav>
+  );
+}
+
+/**
+ * Công tắc workspace — đứng cạnh logo, hai nửa của một khối `seg`.
+ *
+ * Chuyển workspace GIỮ trang đang đứng (`/bae/luong` → `/swe/luong`) nhưng BỎ
+ * query string: bộ lọc của nghề này vô nghĩa với nghề kia. Riêng trang chi
+ * tiết tin (`/viec/123`) thì về Kho tin — số hiệu tin chỉ có nghĩa trong CSDL
+ * của nó. Là `<a>` thường: chạy được khi JavaScript chưa tải.
+ */
+export function WorkspaceSwitch({ ws }: { ws: WorkspaceId }) {
+  const pathname = usePathname();
+  const within = pathWithinWorkspace(pathname);
+  const target = /^\/viec\/[^/]+/.test(within) ? '/viec' : within;
+
+  return (
+    <nav aria-label="Chọn ngành" className="seg w-fit text-[13px]">
+      {WORKSPACE_IDS.map((id) => (
+        <a
+          key={id}
+          href={wsHref(id, target)}
+          aria-current={id === ws ? 'true' : undefined}
+          className="seg-opt whitespace-nowrap"
+        >
+          {WORKSPACES[id].label}
+        </a>
+      ))}
     </nav>
   );
 }

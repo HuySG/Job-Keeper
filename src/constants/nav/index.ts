@@ -6,6 +6,9 @@
  * viết nổi câu hỏi nó trả lời, hoặc câu hỏi đó trùng với một trang đã có, thì
  * đó là một khối trong trang cũ chứ không phải một trang mới.
  *
+ * `href` là đường dẫn TRONG workspace (`/nganh`); nơi vẽ ghép tiền tố bằng
+ * `wsHref`. Nhãn của mục "Ngành" lấy theo workspace (Ngành của Bae / của tôi).
+ *
  * Ba trang phụ — Tin đã lưu, Cài đặt, Bộ thành phần — KHÔNG nằm ở đây: chúng
  * là nút bên phải thanh điều hướng (`NAV_ACTIONS`), vì chúng phục vụ công cụ
  * chứ không trả lời một câu hỏi về thị trường việc làm.
@@ -46,14 +49,20 @@ export const NAV: readonly NavItem[] = [
   },
 ] as const;
 
-/** Nút phụ bên phải thanh điều hướng. */
+/**
+ * Nút phụ bên phải thanh điều hướng. `scoped` = nằm trong workspace (ghép
+ * tiền tố); Bộ thành phần dùng chung cho mọi workspace.
+ */
 export const NAV_ACTIONS = {
-  components: { href: '/thanh-phan', label: 'Chuyển động và thành phần' },
-  saved: { href: '/da-luu', label: 'Tin đã lưu' },
-  settings: { href: '/cai-dat', label: 'Cài đặt ngành và từ khoá' },
+  components: { href: '/thanh-phan', label: 'Chuyển động và thành phần', scoped: false },
+  saved: { href: '/da-luu', label: 'Tin đã lưu', scoped: true },
+  settings: { href: '/cai-dat', label: 'Cài đặt ngành và từ khoá', scoped: true },
 } as const;
 
-/** Trang đang mở có thuộc mục này không. `/` chỉ khớp đúng chính nó. */
-export function isActivePath(href: string, pathname: string): boolean {
-  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+/**
+ * Trang đang mở có thuộc mục này không. `href` là đường dẫn ĐẦY ĐỦ. Trang đầu
+ * của workspace (`/bae`) chỉ khớp đúng chính nó, không khớp `/bae/nganh`.
+ */
+export function isActivePath(href: string, pathname: string, exact = false): boolean {
+  return exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }

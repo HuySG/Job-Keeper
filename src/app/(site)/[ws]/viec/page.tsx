@@ -9,15 +9,15 @@ import { Cmd, Empty } from '@/components/ui/empty';
 import { Glyph } from '@/components/ui/glyph';
 import { Pagination } from '@/components/ui/pagination';
 import { Kicker, StatCell, StatStrip } from '@/components/ui/stat';
-import { DEFAULT_FIELD_SLUG } from '@/constants/field';
+import { WORKSPACES } from '@/constants/workspace';
 import { hasActiveFilter, type SearchParams } from '@/lib/query';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import { formatCount } from '@/utils/format';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Kho tin' };
-
-const PATH = '/viec';
 
 /**
  * Kho tin — trả lời **"tin nào khớp với thứ tôi đang tìm"**.
@@ -27,20 +27,25 @@ const PATH = '/viec';
  * và mỗi dòng có ô vuông cho biết tin đó có nằm trong ngành không.
  */
 export default async function JobListPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ ws: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  const ws = await workspaceParam(routeParams);
+  const PATH = wsHref(ws, '/viec');
+  const fieldSlug = WORKSPACES[ws].defaultField;
   const params = await searchParams;
   const filters = parseJobFilters(params);
 
   const [page, options, overview, definition, field, save] = await Promise.all([
-    findJobs(filters),
-    getFilterOptions(),
-    getOverview(),
-    getFieldDefinition(DEFAULT_FIELD_SLUG),
-    findFieldJobs(DEFAULT_FIELD_SLUG),
-    getSaveContext(),
+    findJobs(ws, filters),
+    getFilterOptions(ws),
+    getOverview(ws),
+    getFieldDefinition(ws, fieldSlug),
+    findFieldJobs(ws, fieldSlug),
+    getSaveContext(ws),
   ]);
 
   const judge = definition ? fieldJudge(definition) : null;
@@ -63,7 +68,7 @@ export default async function JobListPage({
           </div>
           {field && (
             <a
-              href="/nganh"
+              href={wsHref(ws, '/nganh')}
               className="btn btn-secondary h-11 gap-2 border-accent-700 text-accent-800 hover:text-accent-800"
             >
               <Glyph name="funnel" size={15} />
@@ -110,12 +115,12 @@ export default async function JobListPage({
           </Empty>
         ) : (
           <Empty title="Kho đang trống">
-            Chạy <Cmd>npm run crawl -- --full</Cmd> để mèo đi gom tin về.
+            Chạy <Cmd>npm run crawl -- --ws {ws} --full</Cmd> để mèo đi gom tin về.
           </Empty>
         )
       ) : (
         <>
-          <JobTable items={page.items} judge={judge} save={save} />
+          <JobTable ws={ws} items={page.items} judge={judge} save={save} />
 
           <div className="flex flex-wrap items-center gap-4 border-t-2 border-divider px-4 pt-5 pb-3 sm:px-6">
             <p className="text-[13px] text-neutral-700">

@@ -15,9 +15,12 @@ import { Glyph } from '@/components/ui/glyph';
 import { Mascot } from '@/components/ui/mascot';
 import { IdleDot, LiveDot } from '@/components/ui/status';
 import { cx } from '@/components/ui/tone';
-import { DEFAULT_FIELD_SLUG, FRESH_CHECK_HOURS } from '@/constants/field';
+import { FRESH_CHECK_HOURS } from '@/constants/field';
+import { WORKSPACES } from '@/constants/workspace';
 import { CrawlTrigger, RunStatus } from '@/enums';
 import { CRAWL_CYCLE_HOURS, durationUntil, nextCrawlAt } from '@/lib/crawl-schedule';
+import { wsHref } from '@/lib/workspace-path';
+import { workspaceParam } from '@/lib/workspace-route';
 import {
   formatCount,
   formatDateTime,
@@ -46,14 +49,15 @@ export const metadata = { title: 'Nguồn & vận hành' };
  * vẫn ở đây, gọn lại dưới khối 2. Chúng là thứ cần biết TRƯỚC khi biểu đồ
  * lương bắt đầu nói sai, nên không được biến mất chỉ vì bản vẽ không có chỗ.
  */
-export default async function OpsPage() {
+export default async function OpsPage({ params }: { params: Promise<{ ws: string }> }) {
+  const ws = await workspaceParam(params);
   const [sources, runs, parse, reparse, overview, field] = await Promise.all([
-    getSourceHealth(),
-    getRecentRuns(8),
-    getParseHealth(),
-    getReparseCoverage(),
-    getOverview(),
-    findFieldJobs(DEFAULT_FIELD_SLUG),
+    getSourceHealth(ws),
+    getRecentRuns(ws, 8),
+    getParseHealth(ws),
+    getReparseCoverage(ws),
+    getOverview(ws),
+    findFieldJobs(ws, WORKSPACES[ws].defaultField),
   ]);
 
   const now = new Date();
@@ -116,7 +120,10 @@ export default async function OpsPage() {
             >
               <div className="mb-3 flex items-center gap-2">
                 <LiveDot size={8} />
-                <a href={`/viec?source=${source.code}`} className="font-heading text-base font-extrabold text-text">
+                <a
+                  href={wsHref(ws, `/viec?source=${source.code}`)}
+                  className="font-heading text-base font-extrabold text-text"
+                >
                   {source.name}
                 </a>
                 <span className="tag tag-accent ml-auto text-[11px]">đang chạy</span>
@@ -211,7 +218,7 @@ export default async function OpsPage() {
               >
                 Đây là chỗ yếu nhất hiện tại: {formatCount(total - fresh)}/{formatCount(total)} tin chưa được
                 kiểm lại, chỉ tin theo ngày hết hạn sàn ghi. Chạy{' '}
-                <Cmd>npm run recheck -- --filter {field.slug}</Cmd> để mèo đi gõ cửa từng tin.
+                <Cmd>npm run recheck -- --ws {ws} --filter {field.slug}</Cmd> để mèo đi gõ cửa từng tin.
               </Callout>
             ) : (
               <Callout tone="live" className="mt-5" icon={<LiveDot size={9} />}>
@@ -244,7 +251,7 @@ export default async function OpsPage() {
             <h5 className="mb-4">Nhật ký quét</h5>
             {runs.length === 0 ? (
               <p className="text-sm text-neutral-700">
-                Chưa có lần chạy nào được ghi nhật ký. Chạy <Cmd>npm run crawl</Cmd> để bắt đầu.
+                Chưa có lần chạy nào được ghi nhật ký. Chạy <Cmd>npm run crawl -- --ws {ws}</Cmd> để bắt đầu.
               </p>
             ) : (
               <div className="flex flex-col border-b border-divider">
