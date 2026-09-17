@@ -822,13 +822,42 @@ rào giữ nguyên hành vi cũ (timviec365, "Upto $1100", "20 months"); so code
 mới trên **2.926 blob**: bae **0/2.640** đổi, swe 4/286 đổi (đúng 4 tin ITviec
 kể trên, cả 4 nay đúng); 0/0 chuỗi lương văn bản trong CSDL bae đổi.
 
-**Chưa sửa — cần anh quyết:**
+**Ba việc treo — anh giao "giải quyết theo hướng tốt nhất" (17/09/2026):**
 
-| # | Vấn đề | Đề xuất |
+| # | Vấn đề | Đã làm |
 |---|---|---|
-| B′ | 151 tin sống của Bae đang lương 0 đồng. Không có blob nên `reparse` không cứu được | Để lượt cào CI tự ghi đè khi thấy lại tin (VNW 4 lần/ngày) **sau khi đẩy code**. Tin đã hết hạn giữ số 0 nhưng không vào thống kê. Hoặc chạy một câu `UPDATE ... SET "salaryIsPublic" = false WHERE "fxRate" = 0` cho sạch ngay — ghi vào CSDL Bae nên chờ anh đồng ý. Nên khai Variable `USD_VND_RATE` trên GitHub |
-| C1 | Lỗi GHI của MỘT tin làm dừng CẢ nguồn (`upsertJob` không được bắt theo từng tin) | Bắt theo từng tin, đếm vào `failed`; dừng nguồn chỉ khi nhiều tin liên tiếp cùng hỏng (dấu hiệu mất kết nối CSDL) |
-| C2 | Lương bị cờ `outOfRange` vẫn giữ số và vẫn `salaryIsPublic = true` → vẫn vào trung vị, trái với chú thích "đánh dấu thay vì để số rác lọt vào trung vị". Bae: 185 tin | Để `salaryIsPublic = false` (giữ `salaryRaw` để truy vết) khi ngoài khoảng — đổi thống kê của Bae nên chờ anh quyết |
+| C2 | Lương bị cờ `outOfRange` vẫn giữ số và vẫn `salaryIsPublic = true` → vẫn vào trung vị. Bae: 185 tin | `finalize` nay trả **không công khai** khi ngoài khoảng (giữ `salaryRaw` + cờ PARTIAL). Số rác cũng không còn tới được CSDL, nên hết chuyện tràn cột Int |
+| C1 | Lỗi GHI của MỘT tin làm dừng CẢ nguồn | Bắt theo từng tin, đếm vào `failed`; dừng nguồn khi **5 tin liên tiếp** cùng hỏng (`FailureStreak`, `MAX_CONSECUTIVE_WRITE_FAILURES`). Log chỉ in dòng lý do của lỗi Prisma |
+| B′ | 151 tin sống của Bae lương 0 đồng, không có blob | Không chỉ ẩn mà **tính lại**: lệnh mới `npm run repair:salary` đọc lại `salaryRaw` (chính `baseSalary` đã lưu) bằng code mới, ghi `JobAudit manual_fix` cho từng tin. Mặc định chạy khô |
+
+Thứ tự thi công có chủ đích: **đẩy code trước, sửa dữ liệu sau** — nếu làm
+ngược, lượt cron kế tiếp chạy code cũ sẽ ghi lại số 0.
+
+Commit trên `master`: `104250b` (tách workspace) · `cfc5990` (sửa bộ đọc
+lương) · `b71784b` (C1, C2, lệnh sửa lương) — 318 test, `npm run build` sạch.
+
+**Sửa dữ liệu, sau khi đẩy code** (sao lưu 185 dòng bị đụng ra JSON trước):
+
+| Bước | Kết quả |
+|---|---|
+| `repair:salary` chạy khô (bae) | 583 tin không có blob → 179 sẽ đổi: 171 tin USD tính lại ở tỷ giá 25.400, 8 tin ngoài khoảng thành ẩn; 0 `salaryRaw` bị cắt |
+| `repair:salary --apply` (bae) | 179 đã sửa · 0 lỗi · 179 dòng `JobAudit manual_fix` |
+| `reparse --failed` (bae) | 6 tin có blob, cờ PARTIAL → thành "thoả thuận" |
+| `reparse --failed`, rồi `reparse` toàn bộ (swe) | 563 tin tính lại từ blob · 0 lỗi |
+
+| CSDL bae, tin còn sống có lương công khai | Trước | Sau |
+|---|---|---|
+| Số tin | 814 | 802 |
+| Lương 0 đồng | **151** | **0** |
+| Trung vị (điểm giữa khoảng) | 16,0 triệu | **20,0 triệu** |
+| Tin `fxRate = 0` (mọi trạng thái) | 172 | 0 |
+| Tin PARTIAL | 185 | 14 — đều là lương ngoài khoảng, nay đã ẩn |
+
+Trung vị lương của trang Bae đã bị kéo xuống 4 triệu bởi số 0 từ ngày
+25/08/2026 — lần cào CI đầu tiên.
+
+**Còn nên làm (không chặn):** khai Variable `USD_VND_RATE` và
+`USD_VND_RATE_DATE` trên GitHub, để tỷ giá không phải con số dự phòng cài cứng.
 
 ### D4 — cào thật ✅ (sau khi sửa A, B)
 
@@ -876,10 +905,9 @@ phần "≥ 60 tin mức Hợp" chờ chặng 3.
 | C7–C12 | Kỹ năng + độ hợp CV (chặng 3) — `toTechKey` sẽ thay các từ tạm `net develop`/`net engineer`/`asp net` | tôi |
 | — | Cào nốt topdev, glints, vieclam24h (timviec365 chậm, để sau) | tôi |
 | — | `recheck --ws swe` cho 167 tin chưa kiểm còn-sống | tôi, hoặc để lịch CI ở chặng 6 |
-| B′, C1, C2 | Ba việc ở bảng "Chưa sửa" phía trên | **anh quyết** |
-| C7–C12 | Kỹ năng + độ hợp CV (chặng 3) | tôi |
-| — | Chuyển repo sang public | **anh** — Settings → General → Danger Zone |
+| — | Khai Variable `USD_VND_RATE` trên GitHub | **anh** — Settings → Secrets and variables → Actions → Variables |
 | — | Đổi mật khẩu CSDL swe (chuỗi kết nối đã dán vào khung chat) | **anh** — Neon → Roles → Reset password, rồi sửa `.env` |
+| — | Chuyển repo sang public | **anh** — Settings → General → Danger Zone |
 
 ---
 
