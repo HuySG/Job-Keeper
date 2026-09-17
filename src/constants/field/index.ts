@@ -1,10 +1,14 @@
+import { DEFAULT_WORKSPACE, WORKSPACES, type WorkspaceId } from '@/constants/workspace';
+import { REMOTE_SLUG } from '@/crawler/normalize/location';
+
 /**
- * Định nghĩa "ngành của tôi" — nạp vào bảng `SavedFilter`.
+ * Định nghĩa ngành — nạp vào bảng `SavedFilter` của từng workspace.
  *
  * Đây là DỮ LIỆU seed, không phải cấu hình runtime. Sau khi seed, sửa từ điển
  * là `UPDATE SavedFilter SET keywords = ...` — **không deploy, không sửa code**.
  * Để ở đây chỉ để lần cài đặt đầu tiên có ngay thứ chạy được, giống cách
- * `SOURCE_SEEDS` làm với bảng `Source`.
+ * `sourceSeedsFor` làm với bảng `Source`. Mỗi workspace một danh sách, nạp vào
+ * CSDL của riêng nó.
  *
  * Vì sao không dùng một từ khoá: đo thật trên API VietnamWorks 08/09/2026 —
  * "mua hang" 1.258 tin · "purchasing" 1.200 · "procurement" 849 · "cung ung" 474
@@ -35,7 +39,7 @@ export const GRAY_PREFIX = '~';
  * cụ này là của một người. Có thêm ngành thì trang Ngành và Cài đặt đổi được
  * bằng `?f=`, còn bốn trang kia vẫn neo vào ngành này.
  */
-export const DEFAULT_FIELD_SLUG = 'thu-mua-hcm';
+export const DEFAULT_FIELD_SLUG = WORKSPACES[DEFAULT_WORKSPACE].defaultField;
 
 /**
  * Coi là "vừa kiểm" nếu đã gọi HTTP/API vào tận trang tin trong ngần này giờ.
@@ -56,7 +60,7 @@ export interface FieldSeed {
   note: string;
 }
 
-export const FIELD_SEEDS: readonly FieldSeed[] = [
+const PURCHASE_FIELDS: readonly FieldSeed[] = [
   {
     slug: 'thu-mua-hcm',
     name: 'Thu mua — TP.HCM',
@@ -156,3 +160,131 @@ export const FIELD_SEEDS: readonly FieldSeed[] = [
       'vieclam24h ("nhân viên kho hàng"), và nhân sự dùng chung chữ "sourcing".',
   },
 ];
+
+/**
+ * Nghề lập trình, khớp CV .NET/React — docs/plan-swe.md §4.
+ *
+ * ⚠️ BẢN NHÁP (17/09/2026), chưa soi trên dữ liệu thật. Và còn một giới hạn
+ *    biết trước: bộ chuẩn hoá hiện tại xoá `.`, `#`, `+`, nên ".NET" thành
+ *    "net" và "C#" thành "c". Cho tới khi có `toTechKey` (việc C7) thì chỉ
+ *    những từ viết được bằng chữ thường mới khớp — đó là lý do có
+ *    `net develop`, `net core`, `asp net` bên cạnh `dotnet`/`csharp`.
+ */
+const SOFTWARE_FIELDS: readonly FieldSeed[] = [
+  {
+    slug: 'phan-mem-hcm',
+    name: 'Phần mềm .NET/React — TP.HCM',
+
+    keywords: [
+      // ── Vai trò ────────────────────────────────────────────────────────────
+      'lập trình viên',
+      'lập trình',
+      'developer',
+      'software engineer',
+      'kỹ sư phần mềm',
+      // Đo 17/09 — bốn tin lập trình bị loại oan vì thiếu các cụm này:
+      // "01 Chuyên Viên Phát Triển Phần Mềm", "Kỹ Sư Phát Triển Ứng Dụng",
+      // "ATS Software Development Engineer".
+      'phát triển phần mềm',
+      'phát triển ứng dụng',
+      'software develop',
+      'backend',
+      'back end',
+      'fullstack',
+      'full stack',
+      'frontend',
+      'front end',
+      'web developer',
+      // ── Công nghệ của CV ───────────────────────────────────────────────────
+      'dotnet',
+      // Tiền tố chứ không phải cả chữ: khớp cả "developer" lẫn "development".
+      // Đo 17/09: VNW trả "NET Development Engineer" — dấu chấm đã mất từ nguồn.
+      'net develop',
+      // Đo 17/09: "Senior .NET Engineer Fintech domain" bị loại oan — `engineer`
+      // chỉ là từ xám.
+      'net engineer',
+      'net core',
+      'asp net',
+      'csharp',
+      'reactjs',
+      'react',
+      // ── Xám: "Kỹ sư xây dựng", "Sales Engineer" cũng có chữ này ────────────
+      `${GRAY_PREFIX}engineer`,
+      `${GRAY_PREFIX}kỹ sư`,
+      `${GRAY_PREFIX}it`,
+      `${GRAY_PREFIX}erp`,
+      `${GRAY_PREFIX}devops`,
+      `${GRAY_PREFIX}system`,
+    ],
+
+    excludes: [
+      // ── Kiểm thử ───────────────────────────────────────────────────────────
+      'tester',
+      'qa',
+      'qc',
+      'kiểm thử',
+      'automation test',
+      // ── Không viết code ────────────────────────────────────────────────────
+      'business analyst',
+      'product owner',
+      'project manager',
+      'scrum master',
+      'comtor',
+      // ── Bán hàng ───────────────────────────────────────────────────────────
+      'sales',
+      'kinh doanh',
+      'presales',
+      'tư vấn',
+      // ── Nhân sự — "IT Recruiter" có chữ IT ─────────────────────────────────
+      // KHÔNG dùng "tuyển dụng" trần: VNW mở đầu tiêu đề bằng chữ đó
+      // ("Tuyển Dụng Kỹ Sư Phát Triển Ứng Dụng" — đo 17/09, bị loại oan).
+      'chuyên viên tuyển dụng',
+      'nhân viên tuyển dụng',
+      'thực tập sinh tuyển dụng',
+      'recruiter',
+      'talent acquisition',
+      'headhunt',
+      // ── Hỗ trợ ─────────────────────────────────────────────────────────────
+      'helpdesk',
+      'it support',
+      'hỗ trợ kỹ thuật',
+      'kỹ thuật viên',
+      // ── Đào tạo ────────────────────────────────────────────────────────────
+      'giảng viên',
+      'giáo viên',
+      'trainer',
+      // ── Nghề khác có chữ "developer"/"kỹ sư" ───────────────────────────────
+      'designer',
+      'ui ux',
+      'game',
+      'embedded',
+      'nhúng',
+      'kỹ sư cơ khí',
+      'kỹ sư xây dựng',
+      'kỹ sư điện',
+      // ── "Lập trình" không phải phần mềm — đo 17/09 trên CareerViet và
+      //    vieclam24h: "Lập trình CNC", "Lập trình khuôn mẫu chính xác cao" ─────
+      'cnc',
+      'plc',
+      'khuôn',
+      'gia công',
+      // ── "Product Developer" của ngành may (CareerViet) ─────────────────────
+      'merchandiser',
+    ],
+
+    // TP.HCM (đã gộp Bình Dương, Bà Rịa – Vũng Tàu) + làm từ xa.
+    provinces: ['ho-chi-minh', REMOTE_SLUG],
+    includeNoSalary: true,
+    // Giữ như bên thu mua cho tới khi có số đo về vòng đời tin IT.
+    maxAgeDays: 90,
+
+    note:
+      'Bản nháp dựng 17/09/2026 từ CV (2 năm .NET/React/SQL, Thủ Đức). ' +
+      'Chưa soi tay trên dữ liệu thật — việc K1 trong docs/plan-swe.md.',
+  },
+];
+
+export const FIELD_SEEDS: Readonly<Record<WorkspaceId, readonly FieldSeed[]>> = {
+  bae: PURCHASE_FIELDS,
+  swe: SOFTWARE_FIELDS,
+};

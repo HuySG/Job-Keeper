@@ -1,0 +1,212 @@
+[
+  {
+    "code": "vnw",
+    "name": "VietnamWorks",
+    "homeUrl": "https://www.vietnamworks.com",
+    "kind": "api",
+    "entryUrl": "https://ms.vietnamworks.com/job-search/v1.0/search",
+    "jobUrlPattern": null,
+    "priority": 10,
+    "config": {
+      "livenessProbe": "none",
+      "queries": [
+        "thu mua",
+        "mua hang",
+        "mua sam",
+        "vat tu",
+        "purchasing",
+        "procurement",
+        "sourcing",
+        "merchandiser",
+        "dau thau",
+        "cung ung"
+      ]
+    },
+    "isActive": true,
+    "note": "ĐÃ CHẠY THẬT 25/08: 1 request -> 50 tin đầy đủ. API JSON công khai, không cần token, 10.556 tin, mỗi bản ghi 106 trường, có isActive/isOnline/expiredOn nên tín hiệu còn-sống lấy thẳng từ nguồn. Bẫy: salaryCurrency khai \"USD\" cho giá trị VND (xem readSalary)."
+  },
+  {
+    "code": "topcv",
+    "name": "TopCV",
+    "homeUrl": "https://www.topcv.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://www.topcv.vn/sitemap/jobs.xml",
+    "jobUrlPattern": "/viec-lam/[^/]+/\\d+\\.html",
+    "priority": 20,
+    "config": {
+      "externalIdPattern": "/(\\d+)\\.html",
+      "excludePatterns": [
+        "/cong-ty/",
+        "/cv/",
+        "/mau-cv/"
+      ],
+      "useCurl": true,
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender"
+    },
+    "isActive": false,
+    "note": "TẮT 25/08, ĐO LẠI 11/09/2026 và VẪN TẮT. Nguồn này bị chặn ở tầng biên, KHÔNG phải vì chính sách: robots.txt của TopCV CHO PHÉP mọi trang việc làm (chỉ chặn khu CV/hồ sơ). BƯỚC 1 — curl thay undici, đã thử: đo cũ 25/08 curl 200 (9/9) còn Node fetch 403 (6/6). Đo lại 11/09 vẫn đúng chiều đó — Node fetch 403 (5.041 B trang chặn), curl trần thì 200/200/403. Nên đã nối dây cờ `useCurl` và chạy `npm run probe -- --source topcv`. KẾT QUẢ: 403 cả hai lần chạy, kể cả sau một lần thử lại của FLAKY_STATUS_CODES. Tức curl KHÔNG đủ — kết luận \"đổi bộ thư viện là xong\" là sai. BƯỚC 2 — tìm chỗ khác nhau. Header không phải thủ phạm: curl với đúng ba header của fetcher (Accept XML, Accept-Language, UA) cho 200/200/200. Thủ phạm là TRÌNH TỰ: mô phỏng đúng lối đi của fetcher — GET robots.txt rồi 2s sau GET sitemap — cho 403/403/200. Giãn lên 15s còn TỆ HƠN: 403/403/403. Nghĩa là không phải giới hạn tốc độ, mà chính lượt đọc robots.txt làm tầng biên đánh dấu client. BƯỚC 3 — dừng ở đây, cố ý. Cách duy nhất còn lại là BỎ QUA robots.txt, mà đó vừa là né tránh phát hiện vừa phá đúng quy tắc PoliteFetcher tồn tại để giữ. Không làm. RANH GIỚI: đổi bộ thư viện HTTP không phải nói dối họ, nhưng bỏ đọc robots.txt, nguỵ trang UA thành Chrome hay mượn JA3 của trình duyệt thì LÀ. Đường sạch còn lại là viết thư xin phép TopCV (User-Agent của ta đã có sẵn email liên hệ). Cấu hình đã kiểm đúng và để nguyên, bật lại là chạy được ngay nếu họ mở: sitemap/jobs.xml là index -> jobs_0..N.xml, mỗi file 200 URL, 183/200 khớp mẫu; đã thêm urlIncludePattern để chỉ tải lát cắt thu mua."
+  },
+  {
+    "code": "topdev",
+    "name": "TopDev",
+    "homeUrl": "https://topdev.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://topdev.vn/sitemap-jobs.xml",
+    "jobUrlPattern": "/detail-jobs/[a-z0-9-]+-\\d+$",
+    "priority": 30,
+    "config": {
+      "externalIdPattern": "-(\\d+)$",
+      "sitemapUrlPattern": "jobs_desc_en",
+      "excludePatterns": [
+        "/companies/",
+        "/blog/"
+      ]
+    },
+    "isActive": true,
+    "note": "ĐÃ CHẠY THẬT 25/08: 5 request, 9,4s, đọc được tin đầy đủ kèm validThrough. Trang danh sách render bằng JS nhưng trang CHI TIẾT vẫn SSR (bắt buộc thế để lên Google Jobs) — nên sitemap đi vòng qua đúng chỗ khó, không cần headless."
+  },
+  {
+    "code": "itviec",
+    "name": "ITviec",
+    "homeUrl": "https://itviec.com",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://itviec.com/dunggiatminh.xml",
+    "jobUrlPattern": "/it-jobs/[a-z0-9-]+-\\d{3,}$",
+    "priority": 25,
+    "config": {
+      "externalIdPattern": "-(\\d{3,})$",
+      "sitemapUrlPattern": "jobs_desc_en",
+      "excludePatterns": [
+        "/companies/",
+        "/blog/"
+      ]
+    },
+    "isActive": true,
+    "note": "ĐO 25/08: jobs_desc_en.xml có 847 URL, tất cả khớp mẫu. robots.txt cởi mở nhất trong các sàn: chỉ chặn đúng /subscriptions/new. CẨN THẬN: /it-jobs/backend-developer (không đuôi số) là trang CHUYÊN MỤC."
+  },
+  {
+    "code": "vieclam24h",
+    "name": "Việc Làm 24h",
+    "homeUrl": "https://vieclam24h.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://cdn1.vieclam24h.vn/file/sitemap/daily/job-0.xml",
+    "jobUrlPattern": "c\\d+p\\d+id\\d+",
+    "priority": 40,
+    "config": {
+      "externalIdPattern": "id(\\d+)",
+      "urlIncludePattern": "(?:c14p122id\\d+|(?:thu-mua|mua-hang|mua-sam|vat-tu|cung-ung|dau-thau|purchasing|procurement|purchaser|merchandiser|sourcing|buyer)[a-z0-9-]*-c\\d+p122id\\d+)",
+      "ignoreLastmod": true
+    },
+    "isActive": true,
+    "note": "ĐO 25/08: job-0.xml là index -> job/tintuyendung-N.xml. Sitemap gốc có <lastmod> và chia sẵn theo nganhnghe-*.xml / tinhthanh-*.xml — đúng chiều cắt cần cho thống kê theo ngành, để dành cho chặng thống kê. ĐO LẠI 08/09: <lastmod> của nguồn này là RÁC — cả 4.180 URL trong tintuyendung-0.xml mang đúng một giá trị 2026-07-28T00:13:4x, tức giờ SINH FILE chứ không phải giờ tin đổi; file tên \"daily\" mà 6 tuần chưa sinh lại. Hệ quả: không bật ignoreLastmod thì từ lần chạy thứ hai nguồn im lặng trả 0 tin. Và vì sitemap đóng băng nên TẦNG 2 (vắng khỏi sitemap) ở đây VÔ GIÁ TRỊ — bằng chứng: tin c14p122id200731476 vẫn nằm trong sitemap, vẫn trả HTTP 200, vẫn còn JSON-LD, nhưng validThrough 2026-08-09 đã qua và trang ghi \"Việc làm này đã hết hạn nộp hồ sơ\". Tin cậy tầng 1 + 4."
+  },
+  {
+    "code": "careerviet",
+    "name": "CareerViet",
+    "homeUrl": "https://careerviet.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://careerviet.vn/sitemap/sitemap.xml",
+    "jobUrlPattern": "/vi/tim-viec-lam/[^/]+\\.\\w+$",
+    "priority": 15,
+    "config": {
+      "externalIdPattern": "\\.([0-9A-F]+)\\.html$",
+      "sitemapUrlPattern": "job_(?:vi_|current_date)",
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender"
+    },
+    "isActive": true,
+    "note": "ĐO THẬT 09/09/2026: /sitemap/sitemap.xml -> index 12 file, trong đó job_vi_0..2 (6.974 URL mỗi file) + job_current_date (860 URL). <lastmod> là THẬT — 2.256 giá trị khác nhau trên 6.974 URL — nên crawl tăng dần dùng được, KHÔNG cần ignoreLastmod như vieclam24h. JSON-LD giàu nhất trong nhóm sitemap: baseSalary VND có min/max, validThrough, experienceRequirements.monthsOfExperience, industry (\"Thu mua / Vật tư\" — khớp thẳng bảng chia loại), và workHours (\"Thứ2-Thứ6(08:00-17:30)\") tức cột lịch thứ 7 sẽ có dữ liệu thật. robots.txt CHO PHÉP đích danh ClaudeBot/GPTBot/Googlebot; nhánh /vi/ tim-viec-lam/ không bị cấm (nhưng /en/tim-viec-lam/ và /vi/jobs/ thì CÓ — thêm một lý do chỉ đi nhánh vi). HAI BẪY đã phải vá ở parser, đừng gỡ: (1) sàn đảo addressRegion và addressLocality — region là QUẬN (\"Quận 5\"), locality mới là TỈNH — nên extractLocations phải thử lần lượt, không thì mọi tin ra province null và biến mất khỏi trang Ngành; (2) employmentType trả [\"\\\"FULL_TIME\\\"\"] có dấu nháy thừa nằm trong chuỗi."
+  },
+  {
+    "code": "timviec365",
+    "name": "Tìm Việc 365",
+    "homeUrl": "https://timviec365.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://timviec365.vn/sitemap.xml",
+    "jobUrlPattern": "/[a-z0-9-]+-p\\d+\\.html$",
+    "priority": 45,
+    "config": {
+      "externalIdPattern": "-p(\\d+)\\.html$",
+      "sitemapUrlPattern": "sitemap-job-",
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender"
+    },
+    "isActive": true,
+    "note": "ĐO THẬT 09/09/2026: sitemap.xml là index 40 file -> sitemap-job-1..7 (2.000 URL mỗi file) + sitemap-job-new (24 tin mới nhất), tổng 12.357 URL tin. <lastmod> THẬT ở mức từng tin — 1.996 giá trị khác nhau trên 2.000 URL — nên crawl tăng dần chạy đúng. JSON-LD JobPosting đầy đủ: baseSalary VND min/max unitText MONTH, datePosted, validThrough, industry + occupationalCategory, identifier.value = đúng id trong URL. robots.txt cởi mở: Allow / cho *, chỉ chặn khu admin/ajax/CV/ứng viên. Trang chi tiết SSR, Node fetch đọc được 200 (214 KB) — KHÔNG bị chặn dấu vân tay TLS như TopCV. Lưu ý: slug bỏ dấu theo kiểu riêng (\"đ\" -> \"dj\", ví dụ \"ky-su-djien\"), nên đừng dựa vào slug để đoán nội dung; chỉ dùng nó để lọc URL. BẪY ĐÁNG KỂ NHẤT — `datePosted` ở đây là ngày ĐĂNG LẦN ĐẦU, không phải ngày gia hạn: đo thật có tin datePosted 2022-02-11 mà validThrough 2026-09-12, tức tin cũ được nhà tuyển dụng gia hạn liên tục. Hệ quả: bộ lọc `maxAgeDays` của SavedFilter (đang để 90 ngày) sẽ loại phần lớn kho cũ của nguồn này và chỉ giữ tin trong `sitemap-job-new`. Đó là hành vi ĐÚNG cho câu hỏi \"tin nào mới\", nhưng nếu muốn cả tin gia hạn thì phải nới maxAgeDays, chứ đừng sửa parser để nói dối ngày đăng."
+  },
+  {
+    "code": "glints",
+    "name": "Glints Việt Nam",
+    "homeUrl": "https://glints.com",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://glints.com/sitemap_index.xml",
+    "jobUrlPattern": "/vn/opportunities/jobs/[^/]+/[0-9a-f-]{36}$",
+    "priority": 18,
+    "config": {
+      "externalIdPattern": "/([0-9a-f-]{36})$",
+      "sitemapUrlPattern": "sitemap_job_vn_",
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender",
+      "useCurl": true
+    },
+    "isActive": true,
+    "note": "LẬT LẠI KẾT LUẬN CŨ. Bản khảo sát trước xếp Glints vào nhóm loại với lý \"không có JSON-LD; dữ liệu nằm trong __NEXT_DATA__\". ĐO LẠI 11/09/2026 thì SAI: trang tin có đúng một khối ld+json JobPosting đầy đủ. Kết luận cũ nhiều khả năng dựa trên trang tải bằng Node fetch — mà Node fetch ở đây nhận HTTP 403 kèm 1,3 MB trang \"Glints - Firewall\", tức là đã đọc nhầm trang tường lửa rồi tưởng là trang tin rỗng. ĐO: robots.txt CHO PHÉP cả sitemap lẫn /vn/opportunities/jobs/ (kiểm bằng chính robots-parser với UA thật của ta). curl 200 (374 KB XML). sitemap_index -> 66 file sitemap_job_vn_*, mỗi file 200 <loc> = 100 tin kèm bản song ngữ; 3 file mẫu cho 600 <loc> -> 300 khớp jobUrlPattern -> 5 khớp thêm từ khoá thu mua (1,7%). Ước lượng cả nhánh VN ~6.600 tin. BẢN SONG NGỮ: mỗi tin xuất hiện hai lần, /vn/... và /vn/en/... — CÙNG một tin. jobUrlPattern ở trên chỉ khớp nhánh không có /en/, nên bản dịch bị loại ngay ở tầng sitemap và thống kê không bị đếm đôi. GIÀU TRƯỜNG: baseSalary VND min/max trong QuantitativeValue, validThrough, experienceRequirements.monthsOfExperience, industry, occupationalCategory (\"Social Media Manager\"), skills dạng chuỗi phẩy, jobBenefits, và hiringOrganization là CHỦ LAO ĐỘNG THẬT (không phải sàn). Địa chỉ theo chiều THUẬN — addressRegion là tỉnh, addressLocality là quận — nên KHÔNG cần trustStreetFirst như vieclamnhamay. KHÔNG có <lastmod> ở bất kỳ mục nào: crawl tăng dần không có tác dụng, nhưng cũng không gây hại (mục thiếu lastmod luôn được giữ), nên không cần ignoreLastmod — cờ đó chỉ để chữa lastmod RÁC, còn đây là KHÔNG CÓ."
+  },
+  {
+    "code": "vieclamnhamay",
+    "name": "Việc Làm Nhà Máy",
+    "homeUrl": "https://vieclamnhamay.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://vieclamnhamay.vn/tin-tuyen-dung.xml",
+    "jobUrlPattern": "/viec-lam/\\d+-[a-z0-9-]+$",
+    "priority": 50,
+    "config": {
+      "externalIdPattern": "/viec-lam/(\\d+)-",
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender",
+      "trustStreetFirst": true
+    },
+    "isActive": true,
+    "note": "ĐO THẬT 11/09/2026. Sàn chuyên việc làm nhà máy/khu công nghiệp — đúng chỗ nghề thu mua vật tư tập trung, nên dù trường dữ liệu nghèo vẫn đáng lấy. robots.txt CHO PHÉP (151 B, không cấm gì đáng kể), không khai Sitemap nào nhưng /sitemap.xml trả 200. Node fetch đọc được, KHÔNG cần curl. ĐƯỜNG ĐI: /sitemap.xml (index 15 file) -> tin-tuyen-dung.xml -> 39 file tin-tuyen-dung-pN.xml, mỗi file 5.000 URL, tổng ~195.000 URL. Đo trên hai file đầu: 10.000 URL -> 354 khớp từ khoá thu mua (3,5%). <lastmod> THẬT ở mức từng tin (4.904 giá trị khác nhau trên 5.000) nên crawl tăng dần chạy đúng, KHÔNG cần ignoreLastmod. BẪY HẠ TẦNG: tin-tuyen-dung.xml khai là <urlset> chứ không phải <sitemapindex>, dù 39 mục bên trong đều là file .xml. Đã phải dạy walkSitemap nhận diện sitemap lồng theo NỘI DUNG thay vì theo thẻ bọc (xem `isNestedSitemap`); không có nó thì nguồn im lặng trả 0 URL. BẪY 1 — NGÀY: datePosted/validThrough dạng \"11-09-2026\" (ngày trước tháng). Đưa thẳng vào new Date() thì V8 đoán theo lối Mỹ: \"11-09-2026\" thành 08/11/2026 (lệch gần hai tháng, và ở tương lai), còn \"25-12-2026\" thành Invalid Date. Đã vá trong parseDate. BẪY 2 — TỈNH: addressRegion và addressLocality là RÁC, không phải bị đảo như CareerViet. Ba tin liên tiếp đều ở TP.HCM theo streetAddress nhưng hai ô kia lần lượt khai \"Hà Nội\", \"HCMC\", \"Bình Dương\". Trong ba giá trị đó chỉ \"Hà Nội\" là bằng chứng: \"HCMC\" và \"Bình Dương\" đều đã là bí danh hợp lệ của ho-chi-minh (Bình Dương sáp nhập vào TP.HCM năm 2025) nên chúng ra đúng kết quả dù đi đường nào. Một tin sai rõ trên ba tin lấy ngẫu nhiên vẫn là quá nhiều để tin vào hai ô ấy — nhưng đừng trích cả ba như thể cả ba đều hỏng. Chỉ streetAddress mang tỉnh thật, nên bật trustStreetFirst; không bật thì tin HCM rơi khỏi trang Ngành. NGHÈO TRƯỜNG: baseSalary hầu hết là {value: \"Thỏa thuận\"} chứ không có số (parseSalaryJsonLd đã trả isPublic=false đúng, không cần vá); không có industry, không có experienceRequirements, employmentType khai \"Khác\"."
+  },
+  {
+    "code": "iconicjob",
+    "name": "ICONIC Job (doanh nghiệp Nhật)",
+    "homeUrl": "https://iconicjob.vn",
+    "kind": "sitemap-jsonld",
+    "entryUrl": "https://iconicjob.vn/sitemap.xml",
+    "jobUrlPattern": "/viec-lam/[A-Za-z0-9-]+-\\d+$",
+    "priority": 60,
+    "config": {
+      "externalIdPattern": "-(\\d+)$",
+      "sitemapUrlPattern": "jobs\\.xml",
+      "urlIncludePattern": "thu-mua|mua-hang|mua-sam|vat-tu|nha-cung-cap|cung-ung|dau-thau|purchasing|purchaser|procurement|sourcing|buyer|merchandiser|merchandise|supply-chain|supplier|vendor|commodity|tender"
+    },
+    "isActive": true,
+    "note": "ĐO THẬT 11/09/2026. Sàn của một công ty tuyển dụng Nhật, chuyên vị trí trong doanh nghiệp Nhật ở Việt Nam — phần lớn là nhà máy, nên tỷ lệ tin thu mua/vật tư cao hơn mặt bằng. robots.txt CHO PHÉP, khai đúng sitemap. Node fetch đọc được, KHÔNG cần curl. ĐO: sitemap.xml -> 3 file, tin nằm hết ở jobs.xml (255 URL, tất cả khớp jobUrlPattern) -> 10 khớp thêm từ khoá thu mua (3,9%). Kho nhỏ nhưng sạch. BẪY — CHỮ HOA TRONG SLUG: URL viết hoa từng từ (\"/viec-lam/Senior-Purchasing-Staff-125687\"), khác mọi sàn còn lại. Đây là lý do jobUrlPattern phải là [A-Za-z0-9-] và urlIncludePattern phải được biên dịch kèm cờ `i` (đã sửa trong generic-jsonld). Để mẫu chữ thường như cũ là lọc sạch 255/255 URL và nguồn im lặng trả 0 tin. KHÔNG có <lastmod> — crawl tăng dần không có tác dụng, nhưng kho chỉ 255 URL nên chi phí quét lại không đáng kể. ⚠ CẢNH BÁO VỀ CỘT CÔNG TY — đọc trước khi dùng nguồn này cho thống kê: hiringOrganization.name LUÔN là \"ICONIC Co., Ltd.\" (kiểm hai tin khác nhau, cùng một giá trị), tức TÊN CÔNG TY TUYỂN HỘ chứ không phải chủ lao động. Trang chi tiết cũng không nêu tên khách hàng ở đâu cả — sàn này cố ý giấu, đó là mô hình kinh doanh của họ. Hệ quả: mọi tin của nguồn này gộp về MỘT Company, và bảng \"công ty tuyển nhiều nhất\" sẽ có một dòng ICONIC to bất thường. Con số ấy không sai về mặt sự thật (nộp hồ sơ đúng là nộp qua ICONIC) nhưng nó KHÔNG so sánh được với các dòng còn lại. Nếu chuyện đó làm hỏng biểu đồ hơn là số tin thu về đáng giá, hãy TẮT nguồn này — đừng bịa tên chủ lao động từ mô tả."
+  },
+  {
+    "code": "fb-tay",
+    "name": "Facebook (dán tay)",
+    "homeUrl": "https://www.facebook.com",
+    "kind": "manual",
+    "entryUrl": null,
+    "jobUrlPattern": null,
+    "priority": 90,
+    "config": {
+      "livenessProbe": "none"
+    },
+    "isActive": true,
+    "note": "NGUỒN NHẬP TAY, không cào. Lý do đầy đủ ở REJECTED_SOURCES mục \"Facebook (nhóm tuyển dụng)\": robots.txt của họ là danh sách trắng, user-agent * bị Disallow: / và cả ba đường đã thử đều CẤM với UA của ta; thêm nữa phần lớn nhóm tuyển dụng thu mua là nhóm KÍN. Cách dùng: đọc bài trong nhóm bằng tài khoản của chính mình, sao chép nội dung ra một file .txt rồi chạy `npm run ingest -- --source fb-tay --url <permalink> --file bai.txt`. Tin đi qua đúng bộ chuẩn hoá của các nguồn khác. HẠN CHẾ, phải nói thẳng: không có validThrough nên không biết tin còn hay hết, và máy kiểm không được phép dò vào đây. Mặc định ingest đặt hạn 30 ngày kể từ ngày đăng — một PHỎNG ĐOÁN, không phải sự thật từ nguồn."
+  },
+  {
+    "code": "li-tay",
+    "name": "LinkedIn (dán tay)",
+    "homeUrl": "https://www.linkedin.com",
+    "kind": "manual",
+    "entryUrl": null,
+    "jobUrlPattern": null,
+    "priority": 85,
+    "config": {
+      "livenessProbe": "none"
+    },
+    "isActive": true,
+    "note": "NGUỒN NHẬP TAY, không cào. robots.txt của LinkedIn CẤM cả ba đường đã thử với UA thật của ta (xem REJECTED_SOURCES), và điều khoản dịch vụ cũng cấm — đây là lời từ chối, không phải rào kỹ thuật. Cách dùng: mở tin bằng tài khoản của chính mình rồi `npm run ingest -- --source li-tay --url <link tin> --file tin.txt`. MẸO: tin LinkedIn dán ra text thường giữ nguyên các dòng \"Chức danh · Công ty · Địa điểm\" ở đầu, nên `--title` và `--company` hay đoán đúng mà không phải gõ tay — cứ chạy thử rồi xem bản tóm tắt trước khi ghi."
+  }
+]

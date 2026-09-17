@@ -389,6 +389,15 @@ model SavedFilter {
   /// Chỉ lấy tin đăng trong N ngày gần đây
   maxAgeDays Int?
 
+  /// Hồ sơ ứng viên + trọng số chấm "độ hợp CV" (docs/plan-swe.md §3, §5).
+  /// NULL = ngành chỉ lọc bằng từ điển, như ngành thu mua của workspace bae.
+  ///
+  /// JSON chứ không phải bảng riêng, cùng lý do với `Source.config`: hình dạng
+  /// của nó còn đổi theo từng lần hiệu chỉnh, và mỗi lần đổi mà phải migrate là
+  /// phá lời hứa "chỉnh bằng một câu UPDATE". Kiểm hình dạng ở code (zod).
+  /// Vài KB cho một hai dòng — không đáng kể với hạn mức 0,5 GB.
+  profile Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

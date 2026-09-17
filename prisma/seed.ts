@@ -2,24 +2,32 @@ import type { Prisma } from '@prisma/client';
 
 import { db } from '@/api/db';
 import { FIELD_SEEDS } from '@/constants/field';
-import { SOURCE_SEEDS } from '@/constants/source';
+import { sourceSeedsFor } from '@/constants/source';
+import { DEFAULT_WORKSPACE } from '@/constants/workspace';
 import { PROVINCES, REMOTE_SLUG } from '@/crawler/normalize/location';
 import { toMatchKey } from '@/crawler/normalize/text';
 
 import { loadEnv } from '../scripts/_env';
 
 /**
- * Nạp dữ liệu nền: nguồn và địa danh.
+ * Nạp dữ liệu nền vào CSDL của MỘT workspace: nguồn, địa danh, ngành.
+ *
+ *   npm run db:seed                  workspace bae
+ *   npm run db:seed -- --ws swe      workspace swe
+ *
+ * Nguồn và ngành theo workspace (mỗi nghề một lát cắt, một từ điển); địa danh
+ * thì giống hệt nhau ở mọi CSDL.
  *
  * Chạy được nhiều lần mà không hỏng (idempotent) — seed mà chạy một lần rồi
  * thôi thì mỗi lần thêm nguồn lại phải nhớ viết migration tay, và sớm muộn sẽ
  * có môi trường thiếu dữ liệu nền mà không ai để ý.
  */
 async function main(): Promise<void> {
-  loadEnv();
+  const ws = loadEnv();
+  const sourceSeeds = sourceSeedsFor(ws);
 
   // ── Nguồn ──────────────────────────────────────────────────────────────────
-  for (const seed of SOURCE_SEEDS) {
+  for (const seed of sourceSeeds) {
     await db.source.upsert({
       where: { code: seed.code },
       update: {
@@ -49,7 +57,8 @@ async function main(): Promise<void> {
       },
     });
   }
-  console.log(`✓ ${SOURCE_SEEDS.length} nguồn`);
+  const activeCount = sourceSeeds.filter((seed) => seed.isActive).length;
+  console.log(`✓ ${sourceSeeds.length} nguồn (${activeCount} bật khi tạo mới)`);
 
   // ── Địa danh ───────────────────────────────────────────────────────────────
   let aliasCount = 0;
@@ -101,7 +110,7 @@ async function main(): Promise<void> {
   // Đổi từ điển trong mã nguồn thì chạy: npm run db:seed -- --force-fields
   const forceFields = process.argv.includes('--force-fields');
 
-  for (const seed of FIELD_SEEDS) {
+  for (const seed of FIELD_SEEDS[ws]) {
     const data = {
       name: seed.name,
       keywords: [...seed.keywords],
@@ -125,7 +134,8 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log('\nTiếp theo: npm run crawl -- --source vnw --full --limit 400');
+  const wsFlag = ws === DEFAULT_WORKSPACE ? '' : ` --ws ${ws}`;
+  console.log(`\nTiếp theo: npm run crawl --${wsFlag} --source vnw --full --limit 400`);
 }
 
 main()

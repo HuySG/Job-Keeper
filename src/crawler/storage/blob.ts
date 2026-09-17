@@ -2,6 +2,9 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
+import { WORKSPACES } from '@/constants/workspace';
+import { readWorkspaceId } from '@/lib/workspace';
+
 /**
  * Kho blob thô — HTML/JSON gốc của mỗi tin.
  *
@@ -160,7 +163,51 @@ export class NullBlobStore implements BlobStore {
   }
 }
 
-export function createBlobStore(driver = process.env.BLOB_DRIVER || 'fs'): BlobStore {
+/**
+ * Thêm tiền tố workspace vào khoá khi GHI; khi ĐỌC thì dùng nguyên khoá.
+ *
+ * Bất đối xứng là cố ý: `put()` trả về khoá ĐẦY ĐỦ (`swe/vnw/2026-09/1.json.gz`)
+ * và `rawKey` lưu nguyên khoá đó, nên con trỏ trong CSDL tự nói đúng chỗ file
+ * nằm — `reparse` đọc lại mà không cần biết workspace nào đã ghi.
+ *
+ * Không có tiền tố thì cùng một tin ITviec cào ở hai workspace sẽ ghi đè lên
+ * cùng một file: một sợi dây ngầm nối hai CSDL đáng lẽ tách hẳn.
+ */
+export class PrefixedBlobStore implements BlobStore {
+  constructor(
+    private readonly inner: BlobStore,
+    private readonly prefix: string,
+  ) {}
+
+  get driver(): string {
+    return this.inner.driver;
+  }
+
+  put(key: string, payload: unknown): Promise<string> {
+    // Trả đúng thứ kho bên trong trả: kho rỗng trả '' và phải giữ nguyên là '',
+    // không được thành 'swe/' — đó sẽ là một con trỏ chết.
+    return this.inner.put(`${this.prefix}${key}`, payload);
+  }
+
+  get(key: string): Promise<unknown | null> {
+    return this.inner.get(key);
+  }
+}
+
+/** Tiền tố blob của workspace mà script này đang chạy (xem scripts/_env.ts). */
+function processBlobPrefix(): string {
+  return WORKSPACES[readWorkspaceId([], process.env)].blobPrefix;
+}
+
+export function createBlobStore(
+  driver = process.env.BLOB_DRIVER || 'fs',
+  prefix = processBlobPrefix(),
+): BlobStore {
+  const inner = openBlobStore(driver);
+  return prefix ? new PrefixedBlobStore(inner, prefix) : inner;
+}
+
+function openBlobStore(driver: string): BlobStore {
   switch (driver) {
     case 'r2':
       return new R2BlobStore();

@@ -129,16 +129,41 @@ Thêm một thư viện biểu đồ cho vài chục hình chữ nhật là đá
 | Lệnh | Việc |
 |---|---|
 | `npm run probe -- --source <code>` | **Dò một nguồn, không cần DB.** Thêm `--limit N` |
+| `npm run measure -- --source <code>` | **Đo lát cắt**: mẫu lọc giữ lại bao nhiêu URL của sàn, không tải trang chi tiết. `--pattern "a\|\|b"` so nhiều mẫu, `--queries` cho VNW |
 | `npm run crawl` | Quét tăng dần mọi nguồn đang bật |
 | `npm run crawl -- --source topcv,itviec` | Chỉ vài nguồn |
 | `npm run crawl -- --full` | Quét đầy đủ — **và chỉ khi đó mới dám đóng tin đã biến mất** |
 | `npm run crawl -- --dry` | Không ghi DB, chỉ in ra |
 | `npm run reparse` | **Tính lại toàn bộ từ blob đã lưu, không gọi mạng.** `-- --failed --dry` |
 | `npm run db:push` / `db:seed` / `db:studio` | Thao tác CSDL |
-| `npm test` | 102 test, chạy trên fixture JSON-LD **thật** của 3 sàn |
+| `... -- --ws swe` | **Chọn workspace** cho mọi lệnh trên (mặc định `bae`). Xem bên dưới |
+| `npm test` | 263 test, chạy trên fixture JSON-LD **thật** của 3 sàn |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run dev` | **Bảng điều khiển web** ở http://localhost:3000 |
 | `npm run build` / `npm start` | Bản production |
+
+### Hai workspace, hai CSDL
+
+Từ 17/09/2026 dự án phục vụ hai nghề, mỗi nghề một CSDL Postgres riêng
+([docs/plan-swe.md](docs/plan-swe.md)):
+
+| Workspace | Nghề | CSDL |
+|---|---|---|
+| `bae` (mặc định) | **Ngành của Bae** — thu mua, TP.HCM | `DATABASE_URL` |
+| `swe` | **Ngành của tôi** — phần mềm .NET/React | `DATABASE_URL_SWE` |
+
+Mọi script nhận `--ws <tên>` và in ngay dòng đầu CSDL nó sắp đụng tới:
+
+```bash
+npm run probe   -- --ws swe --source itviec    # không cần CSDL
+npm run db:push -- --ws swe
+npm run db:seed -- --ws swe
+npm run crawl   -- --ws swe --source vnw,itviec --dry
+```
+
+Không có `--ws` thì mọi lệnh chạy đúng như trước ngày tách. Cách vào từng sàn
+nằm ở [catalog.ts](src/constants/source/catalog.ts) (dùng chung), còn lấy lát
+nào theo nghề nằm ở [targeting.ts](src/constants/source/targeting.ts).
 
 `npm run reparse` là lệnh quan trọng nhất khi bảo trì: mỗi tin được lưu bản
 JSON-LD gốc trên blob store, nên sửa parser rồi chạy lệnh này là toàn bộ lịch sử

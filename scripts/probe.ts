@@ -1,4 +1,4 @@
-import { SOURCE_SEEDS } from '@/constants/source';
+import { sourceSeedsFor } from '@/constants/source';
 import { PoliteFetcher } from '@/crawler/fetcher';
 import { applyFetchQuirks, getAdapter } from '@/crawler/sources/registry';
 import type { SourceConfig } from '@/crawler/sources/types';
@@ -12,31 +12,36 @@ import { loadEnv, parseArgs } from './_env';
  *
  *   npm run probe -- --source topdev --limit 3
  *   npm run probe -- --source vnw --limit 5
+ *   npm run probe -- --ws swe --source itviec    lát cắt của nghề lập trình
  *
  * Đây là công cụ dùng nhiều nhất khi thêm nguồn mới: nó đi hết chuỗi
  * robots.txt → sitemap → JSON-LD → chuẩn hoá và in ra thứ parser đọc được,
  * trước khi cho phép bất cứ thứ gì chạm vào DB.
  *
  * Khác `npm run crawl -- --dry` ở chỗ lệnh kia vẫn đọc danh sách nguồn từ DB,
- * còn lệnh này lấy thẳng từ SOURCE_SEEDS nên chạy được trên máy trắng.
+ * còn lệnh này lấy thẳng từ `sourceSeedsFor(ws)` nên chạy được trên máy trắng
+ * — kể cả với workspace chưa có CSDL. Đó là cách đo lát cắt của một nghề mới
+ * TRƯỚC khi dựng CSDL cho nó.
  */
 async function main(): Promise<void> {
-  loadEnv();
+  const ws = loadEnv({ db: false });
+  const seeds = sourceSeedsFor(ws);
   const args = parseArgs(process.argv.slice(2));
 
   const code = args.string('source');
   const limit = args.number('limit') ?? 3;
 
   if (!code) {
-    console.log('Dùng: npm run probe -- --source <code> [--limit N]\n');
+    console.log('Dùng: npm run probe -- [--ws <workspace>] --source <code> [--limit N]\n');
     console.log('Nguồn có sẵn:');
-    for (const seed of SOURCE_SEEDS) {
-      console.log(`  ${seed.code.padEnd(12)} ${seed.name.padEnd(16)} ${seed.kind}`);
+    for (const seed of seeds) {
+      const state = seed.isActive ? '' : '  (tắt ở workspace này)';
+      console.log(`  ${seed.code.padEnd(12)} ${seed.name.padEnd(16)} ${seed.kind}${state}`);
     }
     return;
   }
 
-  const seed = SOURCE_SEEDS.find((s) => s.code === code);
+  const seed = seeds.find((s) => s.code === code);
   if (!seed) {
     console.error(`Không có nguồn "${code}".`);
     process.exitCode = 1;

@@ -12,15 +12,16 @@
     "match": "tsx scripts/match.ts",
     "recheck": "tsx scripts/recheck.ts",
     "reparse": "tsx scripts/reparse.ts",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
+    "db:push": "tsx scripts/prisma-ws.ts db push",
+    "db:studio": "tsx scripts/prisma-ws.ts studio",
     "db:seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "probe": "tsx scripts/probe.ts",
     "ingest": "tsx scripts/ingest.ts",
-    "db:inspect": "tsx scripts/inspect.ts"
+    "db:inspect": "tsx scripts/inspect.ts",
+    "measure": "tsx scripts/measure.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

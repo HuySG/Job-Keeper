@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { db } from '@/api/db';
+import { DEFAULT_WORKSPACE, WORKSPACES } from '@/constants/workspace';
 import { extractLocations, normalizeJobPosting, type NormalizedJob } from '@/crawler/normalize';
 import { upsertJob } from '@/crawler/pipeline';
 import type { SourceConfig } from '@/crawler/sources/types';
@@ -45,7 +46,7 @@ import { loadEnv, parseArgs } from './_env';
 const DEFAULT_VALID_DAYS = 30;
 
 async function main(): Promise<void> {
-  loadEnv();
+  const ws = loadEnv();
   const args = parseArgs(process.argv.slice(2));
 
   const code = args.string('source');
@@ -159,7 +160,13 @@ async function main(): Promise<void> {
   );
 
   console.log(`\n✓ Đã ${outcome === 'created' ? 'THÊM' : 'CẬP NHẬT'} tin (${source.name}).`);
-  console.log('  Xem ở trang Ngành: /nganh?f=thu-mua-hcm');
+  // Trang web hiện chỉ đọc CSDL của workspace mặc định; đường dẫn theo
+  // workspace (`/swe/nganh`) có từ chặng 4 của docs/plan-swe.md.
+  console.log(
+    ws === DEFAULT_WORKSPACE
+      ? `  Xem ở trang Ngành: /nganh?f=${WORKSPACES[ws].defaultField}`
+      : `  Tin nằm trong CSDL workspace "${ws}" — trang web chưa đọc workspace này.`,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

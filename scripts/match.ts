@@ -1,4 +1,5 @@
 import { db } from '@/api/db';
+import { WORKSPACES } from '@/constants/workspace';
 import { JobStatus } from '@/enums';
 import {
   compileField,
@@ -14,6 +15,7 @@ import { loadEnv, parseArgs } from './_env';
  * Soi xem từ điển ngành đang bắt đúng cái gì — **KHÔNG ghi DB**.
  *
  *   npm run match                                  ngành mặc định, 20 dòng mỗi loại
+ *   npm run match -- --ws swe                      ngành mặc định của workspace swe
  *   npm run match -- --filter thu-mua-hcm
  *   npm run match -- --show reject                 xem tin bị loại, để dò loại oan
  *   npm run match -- --show weak --sample 40
@@ -25,10 +27,12 @@ import { loadEnv, parseArgs } from './_env';
  * chạy sai cũng không hỏng dữ liệu.
  */
 async function main(): Promise<void> {
-  loadEnv();
+  const ws = loadEnv();
   const args = parseArgs(process.argv.slice(2));
 
-  const slug = args.string('filter') ?? 'thu-mua-hcm';
+  // Mặc định là ngành chính của workspace đang chọn — `--ws swe` mà vẫn tìm
+  // `thu-mua-hcm` thì chỉ ra "không có ngành" trong CSDL phần mềm.
+  const slug = args.string('filter') ?? WORKSPACES[ws].defaultField;
   const sample = args.number('sample') ?? 20;
   const show = (args.string('show') ?? 'strong') as Verdict | 'all';
   const strictHcm = args.boolean('strict-hcm');

@@ -12,7 +12,7 @@ import { compileField, isNarrowHcm, matchJob } from '@/lib/field-match';
  * đã đo được.
  */
 
-const seed = FIELD_SEEDS.find((f) => f.slug === 'thu-mua-hcm');
+const seed = FIELD_SEEDS.bae.find((f) => f.slug === 'thu-mua-hcm');
 if (!seed) throw new Error('thiếu seed ngành thu-mua-hcm');
 
 const field = compileField({ keywords: seed.keywords, excludes: seed.excludes });
@@ -145,5 +145,67 @@ describe('TP.HCM hẹp — trước sáp nhập 2025', () => {
 
   it('không có địa điểm nào thì không dám nhận là HCM', () => {
     expect(isNarrowHcm([])).toBe(false);
+  });
+});
+
+/**
+ * Từ điển `phan-mem-hcm` của workspace swe — bản nháp 17/09/2026.
+ *
+ * Mọi tiêu đề dưới đây là tiêu đề THẬT thấy khi đo lát cắt swe (VNW, ITviec,
+ * CareerViet, vieclam24h, timviec365). Từ điển chỉ trả lời "có phải nghề lập
+ * trình không"; "có hợp CV .NET không" là việc của tầng độ hợp CV (C10) — nên
+ * "Java Developer" ở đây được NHẬN là đúng.
+ */
+describe('từ điển phần mềm (workspace swe)', () => {
+  const sweSeed = FIELD_SEEDS.swe.find((f) => f.slug === 'phan-mem-hcm');
+  if (!sweSeed) throw new Error('thiếu seed ngành phan-mem-hcm');
+  const swe = compileField({ keywords: sweSeed.keywords, excludes: sweSeed.excludes });
+  const sweVerdict = (title: string): string => matchJob(swe, { title }).verdict;
+
+  it.each([
+    'NET Development Engineer (Chinese Speaking)',
+    'Senior Full-Stack Software Developer (.NET, React/angular, Power Apps)',
+    '[HCM - Tan Phu] C# / SQL Developer',
+    'Front-End Developer (React/ TypeScript)',
+    'Lập trình viên Frontend lương upto 25M',
+    'Kỹ sư phần mềm',
+    'Senior Backend Engineer',
+    'Java Professional Developer',
+    // Bốn tin từng bị loại oan — đo trên CSDL swe sau lượt cào đầu.
+    'Senior .NET Engineer Fintech domain, English',
+    'Tuyển Dụng Kỹ Sư Phát Triển Ứng Dụng',
+    '01 Chuyên Viên Phát Triển Phần Mềm Phòng Công Nghệ',
+    'R&D - ATS Software Development Engineer',
+  ])('nhận: %s', (title) => {
+    expect(sweVerdict(title)).toBe('strong');
+  });
+
+  it.each([
+    ['Nhân viên lập trình CNC thu nhập đến 20tr', 'cnc'],
+    ['Nhân viên lập trình khuôn mẫu chính xác cao', 'khuôn'],
+    ['Merchandiser / Product Developer (Chinese brand)', 'merchandiser'],
+    ['Nhân viên kinh doanh phần mềm', 'kinh doanh'],
+    ['Automation Tester', 'tester'],
+    ['Project Manager (Japanese)', 'project manager'],
+    ['Thực tập sinh tuyển dụng nhân tài (Talent Acquisition Intern)', 'thực tập sinh tuyển dụng'],
+    ['Chuyên Viên Kinh Doanh Phần Mềm', 'kinh doanh'],
+    ['Nhân Viên Lập Trình Máy CNC/ CNC Programmer', 'cnc'],
+    ['Middle/Senior Embedded Software Engineer', 'embedded'],
+    ['Kỹ thuật viên sửa chữa iPhone', 'kỹ thuật viên'],
+    ['QA Game Tester', 'tester'],
+    ['Kế toán tổng hợp lương từ 16 triệu', 'không khớp từ nào'],
+  ])('loại: %s', (title, reason) => {
+    const result = matchJob(swe, { title });
+    expect(result.verdict).toBe('reject');
+    expect(result.rejectedBy).toBe(reason);
+  });
+
+  it('"Network Engineer" không được nhận chỉ vì chữ engineer (từ xám)', () => {
+    expect(sweVerdict('Network Engineer - Tech Lounge & AV')).toBe('reject');
+  });
+
+  it('từ điển thu mua không bị đổi bởi workspace mới', () => {
+    expect(verdictOf('Nhân viên thu mua')).toBe('strong');
+    expect(verdictOf('Lập trình viên .NET')).toBe('reject');
   });
 });
