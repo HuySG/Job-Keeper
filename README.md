@@ -172,6 +172,24 @@ Không có `--ws` thì mọi lệnh chạy đúng như trước ngày tách. Cá
 nằm ở [catalog.ts](src/constants/source/catalog.ts) (dùng chung), còn lấy lát
 nào theo nghề nằm ở [targeting.ts](src/constants/source/targeting.ts).
 
+### Cào theo lịch — GitHub Actions
+
+Mỗi workspace một workflow, vì lượt cào của hai nghề khác nhau cả bộ nguồn lẫn
+trần thời gian:
+
+| Workflow | Workspace | Lịch (giờ Việt Nam) | Nguồn |
+|---|---|---|---|
+| [crawl.yml](.github/workflows/crawl.yml) | `bae` | 08:00 · 14:00 · 20:00 · 02:00, và 01:30 lượt nặng | vnw — thêm vieclam24h, CareerViet ở lượt nặng |
+| [crawl-swe.yml](.github/workflows/crawl-swe.yml) | `swe` | 11:20 · 17:20 · 23:20, và 04:50 lượt nặng | vnw, ITviec — thêm CareerViet, vieclam24h, Glints, TopDev ở lượt nặng |
+
+Hai workflow dùng **chung** `concurrency: group: crawl` vì hai nghề gõ vào cùng
+các sàn, mà `MIN_DELAY_MS` chỉ giữ được lời hứa lịch sự khi mỗi host có đúng
+một tiến trình xếp hàng. Đổi lại, giờ chạy phải lệch nhau — GitHub chỉ giữ một
+lượt CHỜ mỗi nhóm và huỷ im lặng lượt chờ cũ.
+[tests/workflows.test.ts](tests/workflows.test.ts) chặn bốn kiểu hỏng câm của
+hai file này: lịch xô vào nhau, `if:` trỏ vào chuỗi cron không tồn tại, hẹn
+lịch một nguồn đã tắt hoặc gõ sai mã, và workflow trỏ nhầm ngành của nghề kia.
+
 `npm run reparse` là lệnh quan trọng nhất khi bảo trì: mỗi tin được lưu bản
 JSON-LD gốc trên blob store, nên sửa parser rồi chạy lệnh này là toàn bộ lịch sử
 được tính lại trong vài giây — không phải cào lại sáu nguồn.

@@ -3,8 +3,9 @@
 > Viết ngày **17/09/2026**. Tài liệu có ba phần: **nghiệp vụ** (§2–§5),
 > **kiến trúc** (§6–§10), **thi công** (§11–§15).
 >
-> **Cập nhật 17/09/2026:** đã chốt Q1, Q2, Q7 (§14); **xong chặng 1–4** —
-> CSDL swe có 694 tin, độ hợp CV đã chấm, web chạy hai workspace (§15). Còn chặng 5–7.
+> **Cập nhật 21/09/2026:** đã chốt Q1, Q2, Q7 (§14); **xong chặng 1–4 và
+> chặng 6** — CSDL swe có 694 tin, độ hợp CV đã chấm, web chạy hai workspace,
+> và `crawl-swe.yml` cào tự động 4 lượt/ngày (§15). Còn chặng 5 và 7.
 >
 > Không thay [plan.md](plan.md) (nhiệm vụ thu mua) hay [PLAN.md](../PLAN.md)
 > (kiến trúc tổng). Theo đúng quy ước của plan.md: số nào **đã kiểm** thì ghi
@@ -678,7 +679,7 @@ trên một nhánh riêng; cổng ra là N0.
 | **`.net`/`c#` mất khi chuẩn hoá** (§4.3) | "Network Engineer" lọt vào; tin C# không được nhận | `toTechKey` (C7) + test |
 | **Kỹ năng khớp nửa từ** | tin JavaScript dính cờ `other-stack` vì "java" | ranh giới hai đầu cho kỹ năng |
 | **Slug `net` khớp "internet"** | ngân sách request đốt vào tin lạ | mẫu theo token (§9.3) |
-| **Lịch Actions chồng nhau** | một lượt cào biến mất không dấu vết | lệch giờ ≥ 1h (§10) |
+| **Lịch Actions chồng nhau** | một lượt cào biến mất không dấu vết | lệch giờ ≥ 1h45 (§10) — có test so hai file YAML, đo khoảng cách vòng tròn |
 | ~~Hết phút Actions~~ | — | **đã giải**: repo chuyển public (Q7) |
 | **Repo public để lộ bí mật** | chuỗi Neon xuất hiện trên GitHub | đã rà lịch sử git 17/09: sạch. `.env` nằm trong `.gitignore`; không commit file PDF của CV |
 | **Neon mới khác vùng** | trang swe chậm hơn trang bae rõ rệt | tạo ở `ap-southeast-1` |
@@ -1005,11 +1006,70 @@ chuyển đoạn đầu lạ sang 404 "không khớp", và ca thiếu CSDL khôn
 `notFound()`. Còn đúng một ca — số hiệu tin không có thật — ghi ở
 [deploy.md §6d](deploy.md).
 
+### Chặng 6 — cào tự động · ✅ 21/09/2026 (C22; D6 còn nửa)
+
+**C22** [crawl-swe.yml](../.github/workflows/crawl-swe.yml). Trần thời gian và
+trần số trang lấy từ số đo THẬT trong bảng `CrawlRun` của CSDL swe
+(17/09/2026), không phải ước lượng:
+
+| Nguồn | Đo được | Trần đặt trong workflow | Lượt |
+|---|---|---|---|
+| vnw | 217 trang / 2,2′ | `--limit 500` | mọi lượt |
+| itviec | 260 / 10,5′ | `--limit 300` | mọi lượt |
+| careerviet | 100 / 4,9′ | `--limit 120` | nặng |
+| vieclam24h | (trong cụm 186 trang / 18,7′) | `--limit 100` | nặng |
+| glints + topdev | (cùng cụm trên) | `--limit 150` | nặng |
+| recheck | 200 tin / 6,6′ | `--filter phan-mem-hcm` | mọi lượt |
+
+Cộng lại: lượt nhẹ ≈ 22 phút, lượt nặng ≈ 46 phút → `timeout-minutes: 60`.
+`timviec365` vẫn ngoài lịch (23 giây/URL — xem ghi chú trong file).
+
+**Lịch:** `20 4,10,16` (nhẹ) và `50 21` (nặng) giờ UTC = 11:20 · 17:20 · 23:20
+và 04:50 giờ Việt Nam. Mọi mốc cách lịch của Bae ít nhất **1 giờ 48 phút**;
+phút lẻ để tránh đỉnh giờ, lúc GitHub trễ lịch nhất.
+
+**Ba quyết định đáng ghi:**
+
+1. **Không gộp hai workflow thành một bản tham số hoá.** Lượt cào của Bae là
+   thứ đang chạy tốt hằng ngày; gộp lại nghĩa là mỗi lần sửa cho nghề này đều
+   đặt cược vào đường thu thập dữ liệu của nghề kia. `crawl.yml` **không đổi
+   một dòng nào**.
+2. **`BJ_WORKSPACE: swe` đặt ở cấp job**, không gắn `--ws swe` vào từng lệnh:
+   quên một lệnh là ghi tin lập trình vào CSDL của Bae mà không lỗi nào báo.
+3. **Workflow swe mang theo cả `DATABASE_URL` của Bae** — không phải để dùng
+   (`loadEnv` luôn ghi đè), mà làm chứng cứ cho `assertDistinctDatabases`:
+   dán nhầm chuỗi của Bae vào secret `DATABASE_URL_SWE` chỉ phát hiện được khi
+   nhìn thấy cả hai chuỗi. Bước "Kiểm secret" chặn ca trùng nguyên văn trong 5
+   giây, chốt trong mã nguồn bắt nốt ca pooled/direct.
+
+**Cào thêm để làm gì — đưa câu trả lời ra trang tóm tắt.** Bước cuối chạy
+`npm run match --sample 0` (không ghi gì) và ghi bảng mức hợp CV vào
+`$GITHUB_STEP_SUMMARY`, nên mở một lượt chạy là thấy ngay N1 đã nhích chưa.
+Mốc ngày 21/09: **Rất hợp 9 · Hợp 25 · Với tới 35 · Lệch 144 · thiếu dữ liệu 6**
+trên 219/348 tin thuộc ngành — tức 34 tin "Hợp trở lên", N1 cần ≥ 60.
+
+**[tests/workflows.test.ts](../tests/workflows.test.ts) — 12 test, chặn bốn
+kiểu hỏng CÂM** của hai file YAML (không chạy thử được dưới máy, và kiểu hỏng
+tệ nhất không báo đỏ mà chỉ lặng lẽ không cào gì):
+
+| Kiểu hỏng | Đã thử làm hỏng để xem test có đỏ không |
+|---|---|
+| Đổi cron mà quên đổi `if: github.event.schedule == '…'` → bước "một lần mỗi ngày" không bao giờ chạy | `'50 21'` → `'51 21'`: đỏ ✅ |
+| Hai lịch xô vào nhau → GitHub huỷ im lặng lượt chờ cũ | swe `20 4,…` → `20 1,…`: đỏ, in ra `01:20 (swe) ~ 01:00 (bae)` ✅ |
+| Gõ sai mã nguồn, hoặc hẹn lịch một nguồn đang tắt | `itviec` → `itvec`: đỏ ✅ |
+| Workflow trỏ nhầm ngành / workspace của nghề kia | `--filter` phải khớp `WORKSPACES[ws].defaultField` |
+
+**D6 — còn nửa:** secret `DATABASE_URL_SWE` trên **GitHub** (bảng trong
+[deploy.md §0](deploy.md)) và biến cùng tên trên **Vercel** đều do anh khai.
+Chưa khai thì lượt chạy đầu tiên dừng trong 5 giây với thông báo nói thẳng
+thiếu biến nào và khai ở đâu.
+
 ### Việc tiếp theo
 
 | # | Việc | Ai |
 |---|---|---|
 | C19–C21 | Chặng 5 — trang Ngành của tôi: ô lọc mức hợp CV, loại việc, hình thức làm; thẻ tin hiện khớp/thiếu; khoảng trống kỹ năng ở trang Lương | tôi |
+| — | **Secret `DATABASE_URL_SWE` trên GitHub** — chưa khai thì `crawl-swe.yml` dừng ngay lượt đầu | **anh** — Settings → Secrets and variables → Actions |
 | — | Thêm `DATABASE_URL_SWE` vào Vercel (Production/Preview/Development) — chưa thêm thì `/swe` hiện lời nhắn "chưa có CSDL" | **anh** |
 | — | Khai Variable `USD_VND_RATE` trên GitHub | **anh** — Settings → Secrets and variables → Actions → Variables |
 | — | Đổi mật khẩu CSDL swe (chuỗi kết nối đã dán vào khung chat) | **anh** — Neon → Roles → Reset password, rồi sửa `.env` |

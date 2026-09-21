@@ -20,10 +20,23 @@ Ba lý do crawler không chạy được trên Vercel:
 | Ổ đĩa | `.blobs` cần ghi được và cần *bền*. Ổ đĩa của Vercel là chỉ-đọc và mất sau mỗi lần chạy. |
 | Lịch sự | `MIN_DELAY_MS` giả định một tiến trình duy nhất xếp hàng theo host. Nhiều hàm serverless chạy song song sẽ cùng nện vào một sàn. |
 
-Nên sau khi deploy, luồng vẫn là: **cào ở máy → ghi vào Neon → web trên Vercel
-đọc Neon**. Trang sẽ chạy bình thường kể cả khi máy tắt; nó chỉ không có tin
-mới cho tới lần cào sau. Muốn tự động thì dùng GitHub Actions
-(việc C9 trong [plan.md](plan.md) §7), **không phải** Vercel Cron.
+Nên sau khi deploy, luồng vẫn là: **cào ở máy hoặc trên GitHub Actions → ghi
+vào Neon → web trên Vercel đọc Neon**. Trang chạy bình thường kể cả khi máy
+tắt; nó chỉ không có tin mới cho tới lần cào sau.
+
+**Tự động cào: GitHub Actions, không phải Vercel Cron.** Mỗi workspace một
+workflow — [crawl.yml](../.github/workflows/crawl.yml) cho `bae`,
+[crawl-swe.yml](../.github/workflows/crawl-swe.yml) cho `swe`. Secret cần khai
+ở *Settings → Secrets and variables → Actions* (khác hẳn biến của Vercel, khai
+một bên không tự sang bên kia):
+
+| Tên | Loại | Cho workflow nào |
+|---|---|---|
+| `DATABASE_URL` | Secret | crawl.yml — CSDL của Bae |
+| `DATABASE_URL_SWE` | Secret | crawl-swe.yml — CSDL Ngành của tôi. **Phải khác** `DATABASE_URL`; trùng thì workflow dừng ngay ở bước đầu |
+| `CRAWLER_CONTACT_EMAIL` | Secret | cả hai — User-Agent bắt buộc liên hệ được |
+| `USD_VND_RATE`, `USD_VND_RATE_DATE` | **Variable** | cả hai — không phải bí mật. Chưa khai thì tỷ giá rơi về mức cài cứng 25.400 |
+| `R2_*` | Secret | tuỳ chọn — chưa khai thì không giữ bản JSON-LD thô, `npm run reparse` không tính lại được lượt cào trên runner |
 
 ---
 

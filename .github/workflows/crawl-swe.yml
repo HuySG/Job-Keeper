@@ -1,0 +1,200 @@
+name: Cào tin & kiểm còn tuyển — Ngành của tôi (swe)
+
+# Bản sinh đôi của crawl.yml cho workspace **swe** (Ngành của tôi, phần mềm).
+# Hai workflow tách rời chứ không gộp thành một workflow tham số hoá: lượt cào
+# của Bae là thứ đang chạy tốt hằng ngày, và gộp lại nghĩa là mỗi lần sửa cho
+# nghề này đều đặt cược vào đường thu thập dữ liệu của nghề kia.
+#
+# Khác crawl.yml đúng bốn chỗ:
+#   · BJ_WORKSPACE=swe    → mọi script ghi vào CSDL DATABASE_URL_SWE
+#   · bộ nguồn và trần số trang khác (đo thật, xem từng bước)
+#   · giờ chạy lệch hẳn lịch của Bae (xem `concurrency` bên dưới)
+#   · in thêm bảng "độ hợp CV" vào trang tóm tắt của lượt chạy
+#
+# Xem docs/plan-swe.md §10, docs/deploy.md §0.
+
+on:
+  schedule:
+    # Lượt NHẸ, ba lần/ngày: VietnamWorks (API) + ITviec (nguồn chính).
+    # Giờ UTC; Việt Nam là UTC+7 → 11:20, 17:20, 23:20 giờ Việt Nam.
+    - cron: '20 4,10,16 * * *'
+    # Lượt NẶNG, một lần/ngày: thêm bốn sàn tổng hợp. 04:50 giờ Việt Nam.
+    - cron: '50 21 * * *'
+  # Bấm tay: hai ô dưới đây CHỈ có tác dụng cho lượt bấm tay. Lượt theo lịch
+  # dùng trần riêng ghi ở từng bước, vì mỗi sàn có giá thời gian khác nhau.
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Nguồn cần cào, cách nhau bằng dấu phẩy (chỉ khi bấm tay)'
+        default: 'vnw,itviec'
+      limit:
+        description: 'Trần số tin mỗi nguồn (chỉ khi bấm tay)'
+        default: '300'
+
+# CHUNG nhóm với crawl.yml, cố ý: hai workspace gõ vào CÙNG các sàn (ITviec,
+# CareerViet, vieclam24h), mà `MIN_DELAY_MS` chỉ giữ được lời hứa lịch sự khi
+# mỗi host có ĐÚNG MỘT tiến trình xếp hàng. Chạy song song là âm thầm gấp đôi
+# tần suất gõ cửa.
+#
+# ⚠️ Cái giá của việc dùng chung: GitHub chỉ giữ **một** lượt CHỜ trong mỗi
+#    nhóm; lượt chờ mới đến sẽ huỷ im lặng lượt chờ cũ — mất một lượt cào mà
+#    không có dòng log nào báo. Vì vậy giờ chạy ở đây cách lịch của Bae ít nhất
+#    1 giờ 45 phút ở mọi phía (Bae: 01:00, 07:00, 13:00, 18:30 + 19:00 UTC), và
+#    dùng phút lẻ (:20, :50) để tránh đúng đỉnh giờ — lúc GitHub trễ lịch nhất.
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    # Cộng theo số đo THẬT trên máy ở nhà 17/09/2026 (bảng `CrawlRun` của CSDL
+    # swe): vnw 217 trang/2,2′ · itviec 260/10,5′ · careerviet 100/4,9′ ·
+    # glints+topdev+vieclam24h 186/18,7′ · recheck 200 tin/6,6′.
+    #   lượt nhẹ  ≈ 2′ (npm ci, seed) + 13′ + 7′  ≈ 22 phút
+    #   lượt nặng ≈ 2′ + 13′ + 24′ + 7′           ≈ 46 phút
+    # 60 để lượt nặng không bị cắt giữa chừng mà lượt treo vẫn bị chặn.
+    timeout-minutes: 60
+
+    env:
+      # Chọn workspace cho MỌI bước, thay vì gắn `--ws swe` vào từng lệnh:
+      # quên một lệnh là ghi tin lập trình vào CSDL của Bae mà không lỗi nào
+      # báo. Biến mang tiền tố BJ_ vì Jenkins tự đặt biến tên `WORKSPACE`.
+      BJ_WORKSPACE: swe
+      DATABASE_URL_SWE: ${{ secrets.DATABASE_URL_SWE }}
+      # CSDL của Bae có mặt ở đây KHÔNG phải để dùng — `loadEnv()` luôn ghi đè
+      # DATABASE_URL bằng chuỗi của workspace đang chọn. Nó ở đây làm CHỨNG CỨ
+      # cho chốt `assertDistinctDatabases`: dán nhầm chuỗi của Bae vào secret
+      # DATABASE_URL_SWE là kiểu hỏng tệ nhất (tin IT chảy vào kho thu mua), và
+      # chốt chỉ phát hiện được khi nhìn thấy CẢ HAI chuỗi.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CRAWLER_CONTACT_EMAIL: ${{ secrets.CRAWLER_CONTACT_EMAIL }}
+      CRAWLER_BOT_NAME: BaeJobBot
+      # Không phải bí mật → Variables, không phải Secrets. Chưa khai thì GitHub
+      # truyền CHUỖI RỖNG (không phải "không có biến"); salary.ts nay chỉ nhận
+      # số dương nên rơi về mức dự phòng 25.400 thay vì tính lương 0 đồng — xem
+      # ghi chú dài trong crawl.yml.
+      USD_VND_RATE: ${{ vars.USD_VND_RATE }}
+      USD_VND_RATE_DATE: ${{ vars.USD_VND_RATE_DATE }}
+      # Ổ đĩa runner bị xoá sau mỗi lượt → KHÔNG dùng driver "fs" ở đây, blob
+      # sẽ mất mà `rawKey` vẫn nằm lại trong CSDL. Chưa khai R2 thì dùng kho
+      # rỗng: tin vẫn vào CSDL đủ, chỉ không có bản thô để `reparse`.
+      # Khoá blob của workspace này tự mang tiền tố `swe/` (plan-swe.md §9.5),
+      # nên hai workspace dùng chung một bucket R2 vẫn không đè lên nhau.
+      BLOB_DRIVER: ${{ secrets.R2_ACCOUNT_ID != '' && 'r2' || 'null' }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # PHẢI đứng trước mọi bước tốn thời gian — xem lý do dài trong crawl.yml:
+      # thiếu secret mà không kiểm ở đây thì lượt chạy đi hết 40 giây rồi mới
+      # chết bằng một câu của Prisma không nhắc một chữ nào tới GitHub Secrets.
+      - name: Kiểm secret bắt buộc
+        run: |
+          missing=""
+          [ -z "$DATABASE_URL_SWE" ] && missing="$missing DATABASE_URL_SWE"
+          [ -z "$CRAWLER_CONTACT_EMAIL" ] && missing="$missing CRAWLER_CONTACT_EMAIL"
+          if [ -n "$missing" ]; then
+            echo "::error title=Thiếu GitHub Secret::Chưa khai:$missing"
+            echo ""
+            echo "Khai tại: Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo ""
+            echo "  DATABASE_URL_SWE       chuỗi kết nối Neon của CSDL 'Ngành của tôi'"
+            echo "                         (KHÁC DATABASE_URL — đó là CSDL của Bae)"
+            echo "  CRAWLER_CONTACT_EMAIL  email liên hệ, bắt buộc vì User-Agent phải liên hệ được"
+            exit 1
+          fi
+          # So chuỗi thô, KHÔNG in giá trị ra log. Chốt trong mã nguồn
+          # (assertDistinctDatabases) bắt được cả ca pooled/direct của cùng một
+          # CSDL; ở đây chỉ chặn sớm ca dán nhầm nguyên văn.
+          if [ -n "$DATABASE_URL" ] && [ "$DATABASE_URL" = "$DATABASE_URL_SWE" ]; then
+            echo "::error title=Hai workspace trỏ cùng CSDL::DATABASE_URL_SWE đang mang đúng chuỗi của DATABASE_URL (CSDL của Bae). Tạo Neon project riêng cho workspace swe — xem docs/plan-swe.md §7."
+            exit 1
+          fi
+          echo "✓ Đủ secret bắt buộc, và hai chuỗi kết nối khác nhau."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sinh Prisma Client
+        run: npx prisma generate
+
+      - name: Nạp nguồn, ngành và danh mục kỹ năng
+        # Chạy nhiều lần không hỏng, và KHÔNG ghi đè từ điển ngành đã chỉnh
+        # bằng SQL (seed chỉ ghi đè khi có cờ --force). Bước này bảo đảm cấu
+        # hình nhắm mục tiêu trong mã nguồn luôn khớp cấu hình trong CSDL, và
+        # là chỗ duy nhất nạp bảng `Skill` — không có nó thì crawler cào về
+        # nhưng không bóc được kỹ năng nào, và mọi tin đều "không đủ dữ liệu".
+        run: npm run db:seed
+
+      # VietnamWorks: API, nhanh nhất (217 trang/2,2′), nhưng kho IT của sàn
+      # NHỎ — cả sàn chỉ 19 tin nhắc .NET (đo 17/09/2026). Nguồn phụ, giữ vì rẻ
+      # và vì đây là nơi duy nhất khai kỹ năng có cấu trúc ("C#", "SQL Server").
+      - name: Cào VietnamWorks
+        run: npm run crawl -- --source ${{ inputs.sources || 'vnw' }} --full --limit ${{ inputs.limit || 500 }}
+
+      # ITviec là nguồn CHÍNH của workspace này: đi hết sitemap chỉ tốn 3
+      # request và cho 260/733 URL thuộc phạm vi (35,5% — cao gấp bốn chục lần
+      # các sàn tổng hợp). Chạy ở CẢ lượt nhẹ.
+      #
+      # Bỏ qua khi bấm tay, vì lúc đó ô `sources` ở bước trên đã quyết định cào
+      # nguồn nào.
+      - name: Cào ITviec
+        if: github.event_name == 'schedule'
+        run: npm run crawl -- --source itviec --full --limit 300
+
+      # ── Chỉ lượt NẶNG hằng ngày ────────────────────────────────────────────
+      # Bốn sàn tổng hợp: tỷ lệ URL thuộc phạm vi thấp (0,7–2%) nên đắt hơn
+      # nhiều cho mỗi tin dùng được, nhưng chúng là nơi duy nhất có tin của
+      # công ty sản phẩm nhỏ và công ty gia công không đăng lên ITviec.
+      - name: Cào CareerViet (một lần mỗi ngày)
+        if: github.event.schedule == '50 21 * * *'
+        run: npm run crawl -- --source careerviet --full --limit 120
+
+      - name: Cào vieclam24h (một lần mỗi ngày)
+        if: github.event.schedule == '50 21 * * *'
+        run: npm run crawl -- --source vieclam24h --full --limit 100
+
+      - name: Cào Glints và TopDev (một lần mỗi ngày)
+        if: github.event.schedule == '50 21 * * *'
+        run: npm run crawl -- --source glints,topdev --full --limit 150
+
+      # CỐ Ý CHƯA đưa timviec365 vào lịch, dù nguồn chạy tốt và có 117 URL
+      # thuộc phạm vi: đo 09/09/2026 là ~23 giây/URL, gấp bảy lần CareerViet —
+      # riêng nó đã ăn hết trần thời gian của cả lượt chạy. Muốn bật thì thêm
+      # một bước với trần thấp (`--limit 40`) và nâng `timeout-minutes`.
+
+      - name: Kiểm tin còn tuyển
+        # Chỉ kiểm tin thuộc ngành phần mềm — vài chục request thay vì vài
+        # nghìn. Ba cái van trong scripts/recheck.ts lo phần còn lại.
+        run: npm run recheck -- --filter phan-mem-hcm
+
+      - name: Sức khoẻ dữ liệu
+        # Luôn chạy, kể cả khi bước trên hỏng: khi crawler vỡ thì đây đúng là
+        # lúc cần nhìn số liệu nhất.
+        if: always()
+        run: npm run db:inspect
+
+      # Cào thêm để LÀM GÌ — câu trả lời phải nhìn thấy mà không phải mở log.
+      # `match` không ghi gì, chỉ chấm lại toàn kho và in số tin theo mức hợp
+      # CV. Đích N1 của plan-swe là ≥ 60 tin mức "Hợp" trở lên; ngày 21/09/2026
+      # là 34. Đây là con số để biết lượt cào hôm nay có nhích nó lên không.
+      - name: Độ hợp CV — ghi vào trang tóm tắt
+        if: always()
+        continue-on-error: true
+        run: |
+          {
+            echo '### Ngành của tôi — sau lượt cào'
+            echo ''
+            echo '```'
+            npm run match --silent -- --sample 0 2>&1 | awk '/Kết quả chấm/{on=1} /^── /{on=0} on'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
