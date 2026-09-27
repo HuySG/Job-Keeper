@@ -107,6 +107,13 @@ const BAE: Readonly<Record<string, SourceTargeting>> = {
   glints: { isActive: true, urlIncludePattern: PURCHASE_SLUG },
   vieclamnhamay: { isActive: true, urlIncludePattern: PURCHASE_SLUG },
   iconicjob: { isActive: true, urlIncludePattern: PURCHASE_SLUG },
+  // Ba sàn remote quốc tế, thêm 28/09/2026 cho nghề lập trình. TẮT ở đây và
+  // KHÔNG phải vì kỹ thuật: tin thu mua trên sàn remote quốc tế gần như không
+  // có, và nghề này cần người có mặt ở kho/nhà máy. Vẫn đặt mẫu lọc để lỡ có
+  // ai bật bằng SQL thì không cào nguyên kho 420.000 URL.
+  remoteok: { isActive: false, urlIncludePattern: PURCHASE_SLUG },
+  nodesk: { isActive: false, urlIncludePattern: PURCHASE_SLUG },
+  workingnomads: { isActive: false, urlIncludePattern: PURCHASE_SLUG },
   'fb-tay': { isActive: true },
   'li-tay': { isActive: true },
 };
@@ -177,6 +184,8 @@ const SWE: Readonly<Record<string, SourceTargeting>> = {
       'software engineer',
     ],
   },
+  // Tắt vì tầng biên chặn theo dấu vân tay TLS, KHÔNG phải vì nghề. Lách chỗ
+  // đó là giả dạng trình duyệt — dự án không làm. Xem note trong catalog.
   topcv: { isActive: false, urlIncludePattern: SOFTWARE_SLUG },
   // Đo 17/09/2026: kho TopDev nay lẫn rất nhiều việc phi-IT (Jollibee, VPBank,
   // tư vấn tuyển sinh). Mẫu 5 file đầu (trong 257): 100 URL → 2 khớp (2,0%).
@@ -213,12 +222,28 @@ const SWE: Readonly<Record<string, SourceTargeting>> = {
   timviec365: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
   // Đo 17/09/2026, mẫu 3 file (trong 66): 300 URL → 5 khớp (1,7%).
   glints: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
-  // Việc nhà máy — không phải chỗ tìm việc lập trình. Mẫu vẫn đặt để lỡ bật
-  // lại bằng SQL thì không cào nguyên kho 195.000 URL.
-  vieclamnhamay: { isActive: false, urlIncludePattern: SOFTWARE_SLUG },
-  // Doanh nghiệp Nhật: phần lớn tin đòi tiếng Nhật, CV không có (plan-swe §5.2).
-  iconicjob: { isActive: false, urlIncludePattern: SOFTWARE_SLUG },
-  // LinkedIn là nơi nhiều tin IT nhất mà không cào được — nhập tay.
+  // BẬT 28/09/2026 theo yêu cầu "mở rộng mọi nguồn". Cả hai từng tắt có chủ
+  // đích và lý do cũ vẫn đúng — giữ lại đây để sáu tháng nữa không ai tưởng
+  // đây là hai nguồn ngang hàng với ITviec:
+  //   · vieclamnhamay: việc nhà máy, kho 195.000 URL, tin lập trình gần như
+  //     không có. Mẫu SOFTWARE_SLUG lọc ngay ở tầng sitemap nên cái giá là
+  //     thời gian khám phá, không phải băng thông tải trang tin.
+  //   · iconicjob: doanh nghiệp Nhật, phần lớn tin đòi tiếng Nhật mà CV không
+  //     có (plan-swe §5.2) — bộ chấm độ hợp sẽ gắn cờ `lang-required` và đẩy
+  //     xuống "Lệch". Cào về vẫn có ích: chúng là bằng chứng cho câu "thị
+  //     trường đòi gì mà mình chưa có".
+  vieclamnhamay: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
+  iconicjob: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
+  // Ba sàn remote quốc tế — xem cảnh báo ở đầu nhóm trong catalog.ts: "remote"
+  // không có nghĩa là nhận người ở Việt Nam, và lương USD/năm của thị trường
+  // Mỹ lọt qua khoảng hợp lệ nên kéo lệch trung vị trang Lương.
+  remoteok: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
+  nodesk: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
+  workingnomads: { isActive: true, urlIncludePattern: SOFTWARE_SLUG },
+  // Facebook và LinkedIn KHÔNG cào được và sẽ không bao giờ: robots.txt của cả
+  // hai cấm user-agent của ta, và điều khoản dịch vụ của LinkedIn cũng cấm.
+  // Đó là lời từ chối, không phải rào kỹ thuật. Đường vào duy nhất là
+  // `npm run ingest` — người dùng tự đọc tin rồi dán vào.
   'fb-tay': { isActive: true },
   'li-tay': { isActive: true },
 };

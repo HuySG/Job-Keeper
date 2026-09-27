@@ -16,12 +16,14 @@ import {
   // biến mất lúc chạy.
   SourceKind,
   StatusReason,
+  WorkMode,
 } from '@/enums';
 import { compileSkills, extractSkills, type CompiledSkills } from '@/lib/skill-match';
 
 import { FailureStreak, shortError } from './failure-streak';
 import { HostAbortedError, PoliteFetcher } from './fetcher';
 import type { NormalizedJob } from './normalize';
+import { REMOTE_SLUG } from './normalize/location';
 import { toMatchKey } from './normalize/text';
 import { applyFetchQuirks, getAdapter } from './sources/registry';
 import type { SourceConfig } from './sources/types';
@@ -641,8 +643,36 @@ export async function linkSkills(postingId: number, job: NormalizedJob): Promise
   ]);
 }
 
-async function linkLocations(postingId: number, job: NormalizedJob): Promise<void> {
+/**
+ * Nối tin với tỉnh/thành.
+ *
+ * Tin LÀM TỪ XA mà không tra ra tỉnh nào thì nối vào `remote` — đúng như
+ * `REMOTE_SLUG` đã hứa ("tin làm từ xa không thuộc tỉnh nào, cần một chỗ
+ * riêng"). Trước 28/09/2026 lời hứa đó KHÔNG được giữ: seed vẫn tạo dòng
+ * `Location` "Làm từ xa" và ngành phần mềm vẫn khai `remote` trong `provinces`,
+ * nhưng không đường nào nối tin vào đó — đo 28/09: 0 `JobLocation` mang slug
+ * `remote` trên cả hai CSDL. Hệ quả: mọi tin remote không ghi tỉnh đều rơi
+ * khỏi bộ lọc theo tỉnh và biến mất khỏi trang Ngành, im lặng.
+ *
+ * Chuyện này chỉ thành nghiêm trọng khi thêm ba sàn remote quốc tế: tin của
+ * chúng ghi nơi làm là "Anywhere", không tra ra tỉnh Việt Nam nào, nên nếu
+ * không nối thì cào về bao nhiêu cũng vô hình.
+ *
+ * KHÔNG đụng tới ngành thu mua: `provinces` của ngành đó chỉ có `ho-chi-minh`,
+ * nên tin gắn thêm nhãn `remote` không làm đổi một dòng nào trên trang của Bae
+ * (đo 28/09: 14 tin REMOTE, cả 14 đều đã có tỉnh).
+ */
+/** Phần QUYẾT ĐỊNH của `linkLocations`, tách ra để test không cần CSDL. */
+export function locationSlugsFor(
+  job: Pick<NormalizedJob, 'locations' | 'workMode'>,
+): string[] {
   const slugs = [...new Set(job.locations.map((l) => l.province?.slug).filter(Boolean))] as string[];
+  if (slugs.length === 0 && job.workMode === WorkMode.REMOTE) return [REMOTE_SLUG];
+  return slugs;
+}
+
+async function linkLocations(postingId: number, job: NormalizedJob): Promise<void> {
+  const slugs = locationSlugsFor(job);
   if (slugs.length === 0) return;
 
   const rows = await db.location.findMany({
@@ -651,7 +681,9 @@ async function linkLocations(postingId: number, job: NormalizedJob): Promise<voi
   });
 
   for (const row of rows) {
-    const raw = job.locations.find((l) => l.province?.slug === row.slug)?.raw ?? row.slug;
+    const raw =
+      job.locations.find((l) => l.province?.slug === row.slug)?.raw ??
+      (row.slug === REMOTE_SLUG ? (job.locations[0]?.raw ?? 'Làm từ xa') : row.slug);
     await db.jobLocation.upsert({
       where: { postingId_locationId: { postingId, locationId: row.id } },
       update: { rawText: raw },

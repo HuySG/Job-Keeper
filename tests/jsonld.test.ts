@@ -29,6 +29,24 @@ describe('extractJsonLdBlocks', () => {
     expect(extractJsonLdBlocks(html)).toHaveLength(1);
   });
 
+  it('chịu được thuộc tính type KHÔNG có dấu nháy', () => {
+    // ĐO THẬT 28/09/2026 trên nodesk.co: trang nén nhỏ nên bỏ luôn dấu nháy —
+    // `<script type=application/ld+json>`. HTML5 cho phép, và trình duyệt lẫn
+    // Google đều đọc được. Bộ đọc của ta thì KHÔNG, nên cả sàn 15.077 tin vào
+    // đến nơi rồi bị bỏ qua lặng lẽ với lý do "không có khối JobPosting" —
+    // đúng kiểu hỏng câm: 60 trang tải về, 0 tin, 0 lỗi.
+    const html = `<script type=application/ld+json>{"@type":"JobPosting","title":"b"}</script>`;
+    expect(extractJsonLdBlocks(html)).toHaveLength(1);
+  });
+
+  it('không nhặt nhầm script có type KHÁC', () => {
+    const html = `
+      <script type=application/json>{"@type":"JobPosting"}</script>
+      <script type="text/javascript">var ld = "application/ld+json";</script>
+    `;
+    expect(extractJsonLdBlocks(html)).toHaveLength(0);
+  });
+
   it('gỡ được CDATA', () => {
     expect(extractJsonLdBlocks(wrap('<![CDATA[{"@type":"JobPosting"}]]>'))).toHaveLength(1);
   });

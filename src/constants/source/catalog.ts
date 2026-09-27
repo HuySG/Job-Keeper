@@ -416,6 +416,103 @@ export const SOURCE_CATALOG: readonly SourceCatalogEntry[] = [
       'nguồn này — đừng bịa tên chủ lao động từ mô tả.',
   },
 
+  // ── Sàn REMOTE quốc tế ─────────────────────────────────────────────────────
+  //
+  // Khảo sát 28/09/2026, đo bằng Node fetch với đúng User-Agent của ta. Ba sàn
+  // dưới đây là những sàn DUY NHẤT trong 16 sàn đã thử vừa cho phép trong
+  // robots.txt, vừa có sitemap đọc được, vừa nhúng JSON-LD `JobPosting` ở
+  // trang tin. Bị loại trong cùng lượt khảo sát — lý do đầy đủ ở
+  // REJECTED_SOURCES: jobsgo, weworkremotely (sitemap 403), freec, jobicy
+  // (429), itnavi, himalayas (không có sitemap), devwork (sitemap rỗng),
+  // ybox (sitemap không phải XML), grabjobs (robots 403),
+  // workingnomads → nhận, remotive (sitemap tin 404), arbeitnow (không có
+  // JSON-LD; có API nhưng là sàn Đức), wellfound (sitemap .gz, cần giải nén).
+  //
+  // ⚠️ HAI ĐIỀU PHẢI BIẾT TRƯỚC KHI TIN SỐ LIỆU TỪ NHÓM NÀY:
+  //
+  //  1. **"Remote" không có nghĩa là nhận người ở Việt Nam.** JSON-LD có
+  //     `applicantLocationRequirements`, và mẫu đo được phần lớn ghi "United
+  //     States" / "USA". Bộ chuẩn hoá hiện KHÔNG đọc trường đó, nên tin
+  //     remote-chỉ-Mỹ vẫn vào tỉnh `remote` và vẫn hiện ở trang Ngành. Phải
+  //     nhìn bằng mắt trước khi nộp.
+  //  2. **Lương USD/năm của thị trường Mỹ lọt qua khoảng hợp lệ.** Ví dụ đo
+  //     thật: 216.600–361.700 USD/năm → khoảng 458 triệu VND/tháng, vẫn dưới
+  //     `SALARY_VND_MONTH_MAX` (500 triệu) nên được tính là lương công khai và
+  //     ĐI VÀO TRUNG VỊ của trang Lương. Trộn hai thị trường lao động trong
+  //     một con số trung vị là so sánh sai — xem docs/plan-swe.md §15.
+
+  {
+    code: 'remoteok',
+    name: 'RemoteOK',
+    homeUrl: 'https://remoteok.com',
+    kind: SourceKind.SITEMAP_JSONLD,
+    entryUrl: 'https://remoteok.com/sitemap.xml',
+    // /remote-jobs/<slug>-<id>
+    jobUrlPattern: '/remote-jobs/[^/]+-\\d+$',
+    // Dưới các sàn Việt Nam: tin đúng việc thì tốt, nhưng phần lớn không nhận
+    // người ngoài Mỹ, nên khi trùng tin thì để sàn trong nước làm đại diện.
+    priority: 70,
+    quirks: {
+      externalIdPattern: '-(\\d+)$',
+      // Index 84 file; chỉ nhóm `sitemap-jobs-N.xml` là tin (5.000 URL/file).
+      sitemapUrlPattern: 'sitemap-jobs',
+    },
+    note:
+      'ĐO 28/09/2026: robots.txt "Allow: / · Crawl-delay: 1" cho user-agent * ' +
+      '(MIN_DELAY_MS của ta là 2 giây, chặt hơn lời họ xin). Sitemap index 84 ' +
+      'file, sitemap-jobs-1.xml có 5.000 URL. JSON-LD JobPosting đủ trường: ' +
+      'datePosted, validThrough (+90 ngày), employmentType, hiringOrganization, ' +
+      'baseSalary USD có min/max, jobLocationType TELECOMMUTE. ' +
+      'KHO RẤT LỚN (84 × 5.000) nên PHẢI đi kèm trần số trang — `maxUrls` của ' +
+      'generic-jsonld là `maxDetailPages × 3`, tức trần detail tự cắt luôn phần ' +
+      'khám phá. Cào không trần ở đây là vài chục nghìn request.',
+  },
+  {
+    code: 'nodesk',
+    name: 'NODESK',
+    homeUrl: 'https://nodesk.co',
+    kind: SourceKind.SITEMAP_JSONLD,
+    entryUrl: 'https://nodesk.co/sitemap.xml',
+    // /remote-jobs/<cong-ty>-<chuc-danh>/ — không có số hiệu trong URL.
+    jobUrlPattern: '/remote-jobs/[^/]+/$',
+    priority: 75,
+    quirks: {
+      // Không có id số ở đâu cả, nên slug CHÍNH LÀ id. Ổn định vì slug nằm
+      // trong sitemap và không đổi; đổi slug là sàn tạo tin khác.
+      externalIdPattern: '/remote-jobs/([^/]+)/$',
+      sitemapUrlPattern: 'sitemap-jobs',
+    },
+    note:
+      'ĐO 28/09/2026: robots.txt 63 byte, "Allow: /". sitemap-jobs.xml có ' +
+      '15.077 URL. JSON-LD JobPosting có datePosted, validThrough, ' +
+      'employmentType (mảng), hiringOrganization, jobLocationType TELECOMMUTE, ' +
+      'applicantLocationRequirements (mẫu đo được: "Anywhere"). ' +
+      'KHÔNG có baseSalary ở tin mẫu — nguồn này thường không khai lương, tức ' +
+      'nó không kéo lệch trung vị nhưng cũng không đóng góp gì cho trang Lương.',
+  },
+  {
+    code: 'workingnomads',
+    name: 'Working Nomads',
+    homeUrl: 'https://www.workingnomads.com',
+    kind: SourceKind.SITEMAP_JSONLD,
+    entryUrl: 'https://www.workingnomads.com/sitemap.xml',
+    // /jobs/<slug>-<id>
+    jobUrlPattern: '/jobs/[^/]+-\\d+$',
+    priority: 72,
+    quirks: {
+      externalIdPattern: '-(\\d+)$',
+      // sitemap.xml là <urlset> PHẲNG (8.039 URL, 5.467 trong đó là tin) chứ
+      // không phải index, nên không có gì để lọc ở tầng file — `jobUrlPattern`
+      // làm hết việc.
+    },
+    note:
+      'ĐO 28/09/2026: robots.txt 23 byte, "Disallow:" rỗng tức cho phép tất. ' +
+      'sitemap.xml phẳng 8.039 URL, 5.467 khớp mẫu tin. JSON-LD JobPosting đủ ' +
+      'trường, có baseSalary USD/năm và applicantLocationRequirements (mẫu đo ' +
+      'được: "USA" — xem cảnh báo ở đầu nhóm này). validThrough +30 ngày kể từ ' +
+      'datePosted, tức tầng 1 của máy kiểm còn-sống dùng được ngay.',
+  },
+
   // ── Nguồn NHẬP TAY ─────────────────────────────────────────────────────────
   //
   // Hai nguồn dưới đây không có adapter và sẽ không bao giờ có. `loadSources`

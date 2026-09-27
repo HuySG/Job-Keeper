@@ -1064,10 +1064,97 @@ tệ nhất không báo đỏ mà chỉ lặng lẽ không cào gì):
 Chưa khai thì lượt chạy đầu tiên dừng trong 5 giây với thông báo nói thẳng
 thiếu biến nào và khai ở đâu.
 
+### Mở rộng nguồn + cào song song · 28/09/2026
+
+Yêu cầu: *"mở rộng mọi nguồn, cào mỗi nguồn cùng lúc, không giới hạn"*.
+
+**Song song theo nguồn.** `runCrawl` duyệt `for (const source of sources)` —
+nối đuôi nhau, nên `MAX_CONCURRENT_HOSTS = 4` trong `constants/crawl` thực tế
+chưa bao giờ được dùng tới. Thay vì sửa vòng lặp đó, tách ở tầng workflow:
+mỗi nguồn một job trong ma trận. Được thêm ba thứ mà sửa vòng lặp không có:
+một nguồn hỏng không kéo nguồn khác (`fail-fast: false`), mỗi nguồn một trần
+thời gian riêng, và log tách bạch. **Không phá lời hứa lịch sự** vì
+`MIN_DELAY_MS` là nghỉ giữa hai request tới *cùng một host*.
+
+**"Không giới hạn" — đúng với sàn Việt Nam, KHÔNG đúng với sàn remote.** Bỏ
+`--limit` không phải là bỏ trần: mã nguồn tự áp `MAX_DETAIL_PAGES_PER_SOURCE`
+= 300, tức vẫn là trần, chỉ là trần không ai thấy. Nay các sàn Việt Nam đi với
+`--limit 5000` (số tin thuộc phạm vi của sàn lớn nhất là 260, nên đây là "lấy
+hết"), còn ba sàn remote quốc tế **phải** giữ trần 400: kho của chúng là
+15.000–420.000 URL, và `maxUrls = maxDetailPages × 3` nên trần này cắt luôn
+phần khám phá. Không trần ở đó nghĩa là lượt chạy không bao giờ kết thúc và
+lần sau lại bắt đầu từ đúng chỗ cũ — tệ hơn là có trần.
+
+**Khảo sát 16 sàn mới, nhận 3.** Đo bằng Node fetch với đúng User-Agent thật,
+chỉ đọc robots.txt + sitemap:
+
+| Nhận | Vì sao |
+|---|---|
+| **RemoteOK** | robots "Allow: /, Crawl-delay 1"; index 84 file × 5.000 URL; JSON-LD đủ trường, có lương USD |
+| **NODESK** | robots 63 byte "Allow: /"; sitemap-jobs 15.077 URL; JSON-LD đủ, thường không khai lương |
+| **Working Nomads** | robots "Disallow:" rỗng; sitemap phẳng 8.039 URL (5.467 là tin); JSON-LD đủ, có lương USD |
+
+Loại: jobsgo, weworkremotely (sitemap 403) · freec, jobicy (429) · itnavi,
+himalayas (không có sitemap) · devwork (sitemap rỗng) · ybox (sitemap không
+phải XML) · grabjobs (robots 403) · remotive (sitemap tin 404) · arbeitnow
+(không JSON-LD; có API nhưng là sàn Đức) · wellfound (sitemap .gz).
+
+**LinkedIn và Facebook: KHÔNG cào, và sẽ không bao giờ.** robots.txt của cả
+hai cấm user-agent của ta, điều khoản dịch vụ của LinkedIn cũng cấm. Đó là lời
+từ chối, không phải rào kỹ thuật — xem `REJECTED_SOURCES`. Đường vào duy nhất
+vẫn là `npm run ingest`, do người dùng tự đọc tin rồi dán. **TopCV** cũng vậy
+ở mức khác: tầng biên chặn theo dấu vân tay TLS, lách chỗ đó là giả dạng trình
+duyệt.
+
+**Hai lỗi CÂM lộ ra khi làm việc này** — cả hai đều "chạy xong, 0 tin, 0 lỗi":
+
+1. **Tin làm từ xa không được nối vào tỉnh `remote`.** Seed vẫn tạo dòng
+   `Location` "Làm từ xa", ngành phần mềm vẫn khai `remote` trong `provinces`,
+   nhưng `linkLocations` chỉ nối theo `province?.slug` — đo 28/09: **0**
+   `JobLocation` mang slug `remote` trên cả hai CSDL. Tin remote của ba sàn
+   mới ghi nơi làm là "Anywhere" nên sẽ vô hình hoàn toàn. Sửa: REMOTE mà
+   không tra ra tỉnh nào thì nối vào `remote` (`locationSlugsFor`,
+   [tests/remote-location.test.ts](../tests/remote-location.test.ts)).
+   **Không đụng ngành thu mua**: `provinces` của ngành đó chỉ có `ho-chi-minh`,
+   và cả 14 tin REMOTE của bae đều đã có tỉnh.
+2. **Bộ đọc JSON-LD đòi dấu nháy quanh `type`.** NODESK viết
+   `<script type=application/ld+json>` — HTML5 cho phép, trình duyệt và Google
+   đọc được, bộ đọc của ta thì không. Hệ quả đo được: 60 trang tải về, 0 tin,
+   0 lỗi, lý do ghi là "không có khối JobPosting". Sửa xong thì nodesk ra
+   40/40 tin.
+
+**Kết quả đo sau khi cào thử** (trần nhỏ, chưa phải lượt đầy đủ): CSDL swe
+1.182 tin (vnw 468 · itviec 246 · careerviet 175 · glints 125 · remoteok 59 ·
+vieclam24h 47 · nodesk 40 · topdev 14 · workingnomads 8). Tin thuộc ngành
+219 → **276**. Nhưng mức "Hợp trở lên" 34 → **33**: ba sàn remote thêm nhiều
+tin mà **chưa thêm được tin nào hợp CV** — phần lớn là vai trò không phải
+.NET, hoặc senior, hoặc chỉ nhận người ở Mỹ.
+
+> ### ⚠️ Việc PHẢI làm tiếp: trang Lương đang trộn hai thị trường
+>
+> Lương USD/năm của thị trường Mỹ lọt qua khoảng hợp lệ
+> (`SALARY_VND_MONTH_MAX` = 500 triệu/tháng) nên được tính là lương công khai.
+> Đo 28/09 trên CSDL swe:
+>
+> | Nhóm | Số tin | Trung vị |
+> |---|---|---|
+> | Sàn Việt Nam | 290 | **27,5tr** |
+> | Sàn remote quốc tế | 62 | 243,4tr |
+> | Trộn chung (trang Lương hiện nay) | 352 | **31,8tr** |
+>
+> 27,5 → 31,8 là sai lệch **16%** trên con số mà cả trang Lương xoay quanh.
+> Hai thị trường lao động khác nhau không cộng vào một trung vị được. Cách sửa
+> phải chọn giữa: (a) tách hai cột trên trang Lương, (b) bỏ sàn remote khỏi
+> thống kê lương nhưng vẫn giữ tin, hoặc (c) chỉ giữ tin remote nào nhận người
+> ở Việt Nam (`applicantLocationRequirements` có trong JSON-LD, bộ chuẩn hoá
+> hiện chưa đọc). **Chưa sửa** — `stats.api.ts` có 6 câu SQL thô dùng
+> `salaryIsPublic`, và đây là việc của chặng 5.
+
 ### Việc tiếp theo
 
 | # | Việc | Ai |
 |---|---|---|
+| **C23** | **Trang Lương: tách thị trường Việt Nam khỏi thị trường remote quốc tế** (xem khung cảnh báo ở trên — trung vị đang lệch 16%) | tôi |
 | C19–C21 | Chặng 5 — trang Ngành của tôi: ô lọc mức hợp CV, loại việc, hình thức làm; thẻ tin hiện khớp/thiếu; khoảng trống kỹ năng ở trang Lương | tôi |
 | — | **Secret `DATABASE_URL_SWE` trên GitHub** — chưa khai thì `crawl-swe.yml` dừng ngay lượt đầu | **anh** — Settings → Secrets and variables → Actions |
 | — | Thêm `DATABASE_URL_SWE` vào Vercel (Production/Preview/Development) — chưa thêm thì `/swe` hiện lời nhắn "chưa có CSDL" | **anh** |

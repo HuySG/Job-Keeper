@@ -88,8 +88,29 @@ Ba trang phụ nằm ở nút bên phải thanh điều hướng: `/{ws}/da-luu`
 
 Giao diện dựng theo bản thiết kế **Bae-Job v2** (Claude Design): hệ Modernist —
 góc vuông, vạch 2px, Archivo 800 — nhuộm xanh lá pastel, có bảng màu xanh dương
-thứ hai, và linh vật Mèo Bae bằng điểm ảnh. Token và lớp thành phần nằm ở
+thứ hai. Token và lớp thành phần nằm ở
 [src/styles/globals.css](src/styles/globals.css).
+
+Hai linh vật bằng điểm ảnh, mỗi con một giọng — đừng dùng lẫn:
+
+| | Nói về gì | Dáng / hành động |
+|---|---|---|
+| **Mèo Bae** ([mascot.tsx](src/components/ui/mascot.tsx)) | DỮ LIỆU: ngủ khi kho rỗng, vỗ chân khi đang quét, nói thật về độ tươi | 4 dáng |
+| **Bae** — cô gái áo dài ([bae.tsx](src/components/ui/bae.tsx)) | VIỆC ĐANG LÀM HỘ BẠN: quạt lúc chờ, đọc khi có tin cần soi, vẫy tay khi lưu được tin | 8 hành động |
+
+Mèo luôn đứng **bên trái và thấp hơn** Bae, để mắt đi từ mèo sang Bae rồi tới
+chữ. Cả hai xem thử được ở `/thanh-phan`.
+
+Trang Ngành đổi **chiều chia tin** theo nghề (`WorkspaceConfig.taxonomy`):
+
+- `/bae/nganh` chia theo **ngành của công ty** — sản xuất, dệt may, xây dựng.
+- `/swe/nganh` chia theo **stack** — Java, TypeScript, Go… kèm cấp bậc, hình thức
+  làm, lương trung vị theo stack và phân bổ theo sàn. Stack bóc từ bảng
+  `JobSkill` mà crawler ghi; nhãn **viền** là stack chỉ đọc thấy trong mô tả,
+  nhãn **nền xám** là sàn nguồn tự khai.
+
+"Loại mua hàng" cố ý KHÔNG hiện ở nghề phần mềm: nó vẫn chấm ra giá trị, nhưng
+"mua cho nhà máy nào" là câu vô nghĩa với một tin tuyển backend.
 
 ### Ba ràng buộc kỹ thuật của phần web
 
@@ -104,8 +125,17 @@ số tin khớp, rồi mới lưu ([src/lib/field-draft.ts](src/lib/field-draft.
 **2. Gần như không có JavaScript.** Bộ lọc là `<form method="get">` thuần, lưu tin
 và lưu từ điển là server action gắn vào `<form>` — mọi thứ chạy được khi JS chưa
 tải, và mỗi trạng thái màn hình là một URL dán được. Component phía trình duyệt
-chỉ có hai chỗ: thanh điều hướng (vì "tôi đang ở trang nào" không thể chờ JS) và
-trang Bộ thành phần (vì tab, công tắc, hộp thoại chính là thứ đang trình diễn).
+chỉ có ba chỗ: thanh điều hướng (vì "tôi đang ở trang nào" không thể chờ JS),
+trang Bộ thành phần (vì tab, công tắc, hộp thoại chính là thứ đang trình diễn),
+và màn chào lúc mở web ([boot-screen.tsx](src/components/layout/boot-screen.tsx)).
+
+Màn chào là chỗ ràng buộc này dễ bị phá nhất, nên nó được dựng để **không tồn
+tại** khi thiếu JavaScript: nó trả `null` ở lượt dựng trên máy chủ và chỉ hiện
+sau khi gắn vào DOM. Một tấm phủ `fixed inset-0` nằm sẵn trong HTML mà chỉ gỡ
+được bằng JavaScript sẽ che vĩnh viễn cả trang trên máy tắt JS — cùng lý do
+`loading.tsx` đã bị gỡ (17/09/2026). Nó cũng chỉ chạy **một lượt mỗi phiên**
+(`sessionStorage`) vì mọi liên kết là `<a>` thường, và tự bỏ qua khi người dùng
+tắt chuyển động.
 
 **3. Biểu đồ tự vẽ, không thư viện.** Mọi phân bố trong bản v2 là thanh ngang
 nhãn · rãnh · số ([src/components/ui/bar-row.tsx](src/components/ui/bar-row.tsx)).
@@ -180,15 +210,23 @@ trần thời gian:
 | Workflow | Workspace | Lịch (giờ Việt Nam) | Nguồn |
 |---|---|---|---|
 | [crawl.yml](.github/workflows/crawl.yml) | `bae` | 08:00 · 14:00 · 20:00 · 02:00, và 01:30 lượt nặng | vnw — thêm vieclam24h, CareerViet ở lượt nặng |
-| [crawl-swe.yml](.github/workflows/crawl-swe.yml) | `swe` | 11:20 · 17:20 · 23:20, và 04:50 lượt nặng | vnw, ITviec — thêm CareerViet, vieclam24h, Glints, TopDev ở lượt nặng |
+| [crawl-swe.yml](.github/workflows/crawl-swe.yml) | `swe` | 11:20 · 17:20 · 23:20 · 04:50 | **cả 12 nguồn, mỗi nguồn một job chạy song song** |
 
-Hai workflow dùng **chung** `concurrency: group: crawl` vì hai nghề gõ vào cùng
-các sàn, mà `MIN_DELAY_MS` chỉ giữ được lời hứa lịch sự khi mỗi host có đúng
-một tiến trình xếp hàng. Đổi lại, giờ chạy phải lệch nhau — GitHub chỉ giữ một
-lượt CHỜ mỗi nhóm và huỷ im lặng lượt chờ cũ.
-[tests/workflows.test.ts](tests/workflows.test.ts) chặn bốn kiểu hỏng câm của
+Lượt cào của `swe` chạy **song song theo nguồn** (từ 28/09/2026): `runCrawl`
+duyệt nguồn nối đuôi nhau trong một tiến trình, nên gộp 12 nguồn vào một job
+thì tổng thời gian là tổng của mọi nguồn và một sàn chậm chặn hết phần còn
+lại. Tách ra thì lượt chạy dài bằng nguồn chậm nhất. Việc này **không phá lời
+hứa lịch sự**: `MIN_DELAY_MS` là nghỉ giữa hai request tới *cùng một host*, mà
+mỗi job ở đây là một host khác nhau.
+
+Hai workflow vẫn dùng **chung** `concurrency: group: crawl` vì hai nghề gõ vào
+cùng các sàn. Đổi lại, giờ chạy phải lệch nhau — GitHub chỉ giữ một lượt CHỜ
+mỗi nhóm và huỷ im lặng lượt chờ cũ.
+[tests/workflows.test.ts](tests/workflows.test.ts) chặn sáu kiểu hỏng câm của
 hai file này: lịch xô vào nhau, `if:` trỏ vào chuỗi cron không tồn tại, hẹn
-lịch một nguồn đã tắt hoặc gõ sai mã, và workflow trỏ nhầm ngành của nghề kia.
+lịch một nguồn đã tắt hoặc gõ sai mã, **thêm nguồn vào catalog mà quên thêm
+vào lịch**, **dòng ma trận thiếu `phut` nên job được chạy tới trần 6 giờ**, và
+workflow trỏ nhầm ngành của nghề kia.
 
 `npm run reparse` là lệnh quan trọng nhất khi bảo trì: mỗi tin được lưu bản
 JSON-LD gốc trên blob store, nên sửa parser rồi chạy lệnh này là toàn bộ lịch sử
@@ -276,6 +314,7 @@ src/
 │  └─ storage/blob.ts       R2 / đĩa — HTML thô KHÔNG BAO GIỜ vào Postgres
 ├─ api/                     ★ tầng đọc CSDL cho web — CHỈ ĐỌC
 │  ├─ job.api.ts            danh sách + chi tiết tin, URL -> bộ lọc
+│  ├─ field.api.ts        ★ chấm từ điển ngành, đếm facet, lương theo stack
 │  ├─ stats.api.ts          số liệu tổng hợp, phân vị lương (percentile_cont)
 │  └─ ops.api.ts            sức khoẻ nguồn, nhật ký crawl, khả năng reparse
 ├─ lib/
@@ -283,7 +322,9 @@ src/
 │  └─ chart.ts              hình học biểu đồ: mốc trục đẹp, tỷ lệ, dải phân vị
 ├─ components/
 │  ├─ ui/                 ★ mảnh ghép không biết gì về nghiệp vụ
-│  │  └─ tone.ts            ★ CHỖ DUY NHẤT dịch từ ý nghĩa sang màu
+│  │  ├─ tone.ts            ★ CHỖ DUY NHẤT dịch từ ý nghĩa sang màu
+│  │  ├─ mascot.tsx         Mèo Bae — 4 dáng, dữ liệu điểm ảnh
+│  │  └─ bae.tsx            Bae áo dài — 8 hành động, 4 lớp rời
 │  ├─ charts/               SVG/CSS tự vẽ, không thư viện
 │  ├─ job/                  thẻ tin · bộ lọc · dải chip đang lọc
 │  └─ layout/               khung ngoài + điều hướng

@@ -20,8 +20,27 @@ const snapshot = JSON.parse(
 ) as unknown;
 
 describe('sourceSeedsFor', () => {
-  it('bae ra ĐÚNG bản chụp trước khi tách', () => {
-    expect(sourceSeedsFor('bae')).toEqual(snapshot);
+  it('bae ra ĐÚNG bản chụp trước khi tách — với những nguồn đã có lúc chụp', () => {
+    const snapshotCodes = new Set((snapshot as { code: string }[]).map((s) => s.code));
+    const seeds = sourceSeedsFor('bae');
+    expect(seeds.filter((s) => snapshotCodes.has(s.code))).toEqual(snapshot);
+  });
+
+  // Nguồn thêm SAU ngày chụp (28/09/2026: ba sàn remote quốc tế) không được
+  // làm đổi hành vi của bae. Chúng có mặt trong CSDL bae như một dòng `Source`
+  // đang TẮT — `loadSources` lọc theo `isActive` nên không lượt cào nào của
+  // bae đi tới đó. Đây là điều kiện N0 viết lại cho đúng: không phải "danh
+  // sách nguồn của bae đóng băng", mà "tập nguồn ĐANG BẬT của bae đóng băng".
+  it('mọi nguồn thêm sau bản chụp đều TẮT ở bae', () => {
+    const snapshotCodes = new Set((snapshot as { code: string }[]).map((s) => s.code));
+    const added = sourceSeedsFor('bae').filter((s) => !snapshotCodes.has(s.code));
+    expect(added.filter((s) => s.isActive)).toEqual([]);
+  });
+
+  it('tập nguồn ĐANG BẬT của bae không đổi', () => {
+    const active = (seeds: { code: string; isActive: boolean }[]) =>
+      seeds.filter((s) => s.isActive).map((s) => s.code).sort();
+    expect(active(sourceSeedsFor('bae'))).toEqual(active(snapshot as never));
   });
 
   it('mọi workspace khai đủ mọi nguồn, không thừa nguồn nào', () => {

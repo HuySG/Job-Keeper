@@ -19,8 +19,18 @@ import { z } from 'zod';
  *   - `validThrough` khi có timezone khi không
  */
 
+/**
+ * Giá trị `type` có thể KHÔNG có dấu nháy — HTML5 cho phép, và trang nén nhỏ
+ * hay bỏ nháy đi. Đo thật 28/09/2026 trên nodesk.co:
+ * `<script type=application/ld+json>`. Bản cũ đòi dấu nháy, nên cả sàn 15.077
+ * tin tải về rồi bị bỏ qua với lý do "không có khối JobPosting" — 60 trang,
+ * 0 tin, 0 lỗi, không một dấu hiệu nào để lần ra.
+ *
+ * Nhánh không-nháy phải kết thúc bằng ranh giới (khoảng trắng hoặc `>`), nếu
+ * không nó sẽ khớp cả `type=application/ld+json-something`.
+ */
 const SCRIPT_RE =
-  /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  /<script[^>]*type\s*=\s*(?:["']application\/ld\+json["']|application\/ld\+json(?=[\s>]))[^>]*>([\s\S]*?)<\/script>/gi;
 
 /**
  * Lấy mọi khối ld+json trong trang và parse thành object.
