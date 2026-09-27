@@ -34,7 +34,7 @@ import type { ReactNode } from 'react';
 export default function SiteLayout({ children }: { children: ReactNode }) {
   return (
     <div className="pb-12">
-      <div className="mx-auto min-h-screen max-w-360 bg-bg shadow-md">
+      <div className="mx-auto min-h-screen max-w-(--shell) bg-bg shadow-md">
         {children}
       </div>
     </div>

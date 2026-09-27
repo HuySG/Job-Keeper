@@ -34,7 +34,7 @@ export async function SiteHeader({ ws }: { ws: WorkspaceId }) {
   const href = (path: string, scoped = true) => (scoped ? wsHref(ws, path) : path);
 
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-5 gap-y-2.5 border-b-2 border-divider bg-bg px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-5 gap-y-2.5 border-b-2 border-divider bg-bg px-(--pad) py-3">
       <a href={href('/')} className="flex items-center gap-2.5 text-text hover:text-text">
         <Mascot pose="head" width={34} motion="bob" />
         <span className="font-heading text-[19px] font-extrabold tracking-[-0.02em]">Bae-Job</span>

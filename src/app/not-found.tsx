@@ -10,7 +10,7 @@ export const metadata = { title: 'Không tìm thấy' };
 export default function NotFound() {
   return (
     <div className="pb-12">
-      <div className="mx-auto min-h-screen max-w-360 bg-bg shadow-md">
+      <div className="mx-auto min-h-screen max-w-(--shell) bg-bg shadow-md">
         <NotFoundView />
       </div>
     </div>

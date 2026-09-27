@@ -117,6 +117,38 @@ export function FieldJobCard({
             <span className="min-w-0 truncate">{job.company.name}</span>
           </p>
 
+          {/* Dải stack — chỉ hiện khi tin bóc được công nghệ, nên nó tự tắt ở
+              nghề thu mua mà không cần một điều kiện theo workspace.
+
+              Đứng NGAY DƯỚI tên công ty, trên dải bằng chứng: với một tin lập
+              trình thì "tin này dùng gì" là câu quyết định có đọc tiếp hay
+              không — trước cả nơi làm và số năm kinh nghiệm.
+
+              `declared` (sàn tự khai) in đậm hơn `text` (chỉ thấy khi quét mô
+              tả). Cùng một nhãn cho hai mức tin cậy khác nhau là nói quá về
+              thứ mình chỉ đoán được — xem `JobSkill.origin`. */}
+          {job.skills.length > 0 && (
+            <div className="popwrap flex flex-wrap gap-1.5">
+              {job.skills.slice(0, STACK_CHIPS).map(({ skill, origin }) => (
+                <span
+                  key={skill.slug}
+                  title={origin === 'declared' ? 'Sàn nguồn tự khai' : 'Bae-Job đọc thấy trong mô tả'}
+                  className={cx(
+                    'tag font-heading text-[11px] font-extrabold',
+                    origin === 'declared' ? 'tag-neutral' : 'tag-outline',
+                  )}
+                >
+                  {skill.name}
+                </span>
+              ))}
+              {job.skills.length > STACK_CHIPS && (
+                <span className="self-center text-xs text-neutral-700">
+                  +{job.skills.length - STACK_CHIPS}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Dải bằng chứng. Icon ACCENT = tin CÓ khai thông tin này; icon XÁM
               = tin KHÔNG khai, và chữ bên cạnh nói thẳng điều đó. Đây là cách
               bản thiết kế dẫn mắt tới chỗ dữ liệu thiếu mà không cần thêm nhãn. */}
@@ -130,6 +162,11 @@ export function FieldJobCard({
             {employment && (
               <Fact icon="clock" known>
                 {employment}
+              </Fact>
+            )}
+            {job.workMode && (
+              <Fact icon="globe" known>
+                {WORK_MODE_TEXT[job.workMode] ?? job.workMode}
               </Fact>
             )}
             {purchase.basis !== 'none' && (
@@ -239,6 +276,21 @@ function Fact({
     </span>
   );
 }
+
+/**
+ * Bao nhiêu nhãn stack hiện trên một thẻ.
+ *
+ * Sáu là chỗ vừa đủ cho một dòng ở cột hẹp nhất. Tin lập trình hay gọi tên cả
+ * chục công nghệ, mà mười hai nhãn xám xếp thành ba dòng thì không còn ai đọc
+ * nhãn nào — chúng thành một khối hoa văn.
+ */
+const STACK_CHIPS = 6;
+
+const WORK_MODE_TEXT: Record<string, string> = {
+  ONSITE: 'Làm tại chỗ',
+  HYBRID: 'Hybrid',
+  REMOTE: 'Remote',
+};
 
 export const SATURDAY_TEXT: Record<string, string> = {
   NONE: 'Nghỉ thứ 7',

@@ -4,6 +4,7 @@ import type { Facet, FieldPage } from '@/api/field.api';
 import { BarRow } from '@/components/ui/bar-row';
 import { Glyph, type GlyphName } from '@/components/ui/glyph';
 import { cx } from '@/components/ui/tone';
+import { WORKSPACES } from '@/constants/workspace';
 import { FACET_NONE } from '@/lib/field-bands';
 import { readFlag, readParam, readParams, type SearchParams } from '@/lib/query';
 import { formatCount } from '@/utils/format';
@@ -35,6 +36,23 @@ import { activeFieldFilters } from './field-active-filters';
  *   kế ghi "214 tin ghi thoả thuận" như một dòng chữ; ở đây nó vẫn trông như
  *   thế, nhưng có ô tích — vì đó chính là ô `FACET_NONE` của chiều lương.
  * ─────────────────────────────────────────────────────────────────────────────
+ * MỘT BẢNG LỌC, HAI NGHỀ
+ *
+ * Chiều đầu tiên đổi theo `WorkspaceConfig.taxonomy`, và chỉ chiều đó đổi:
+ *
+ *   · `purchase` → "Loại mua hàng" (ngành của công ty)
+ *   · `stack`    → "Ngôn ngữ & nền tảng" + "Cấp bậc" + "Hình thức làm"
+ *
+ * "Loại mua hàng" KHÔNG được hiện ở nghề phần mềm. Nó vẫn chấm ra giá trị ở đó
+ * — `classifyPurchase` đọc cột `industry` mà sàn nào cũng khai — nhưng "mua cho
+ * nhà máy nào" là một câu vô nghĩa với một tin tuyển backend. Đây là chỗ duy
+ * nhất trong bảng lọc buộc phải rẽ nhánh theo workspace.
+ *
+ * Ngược lại, "Cấp bậc" và "Hình thức làm" là chiều DÙNG ĐƯỢC CHO CẢ HAI nghề,
+ * nhưng hiện chỉ bật ở `stack` — bản thiết kế chỉ vẽ chúng ở màn SWE, và thêm
+ * hai chiều vào trang đã chốt của Bae là một thay đổi không ai yêu cầu. Muốn
+ * bật cho cả hai thì bỏ điều kiện, phần đọc dữ liệu đã đếm sẵn.
+ * ─────────────────────────────────────────────────────────────────────────────
  *
  * ⚠️ `<form>` không khai `action` nộp về đúng trang hiện tại, nhưng MỌI tham số
  *    không có ô nhập tương ứng sẽ bị xoá sạch. `page` thì đáng xoá — đổi bộ lọc
@@ -51,6 +69,7 @@ export function FieldFilterPanel({
 }) {
   const conditions = activeFieldFilters(params).length;
   const cover = (n: number): string => `${formatCount(n)}/${formatCount(result.inFieldTotal)}`;
+  const byStack = WORKSPACES[result.ws].taxonomy === 'stack';
 
   const purchase = result.facets.purchaseTypes;
   const purchaseSelected = new Set(readParams(params, 'loai'));
@@ -58,6 +77,13 @@ export function FieldFilterPanel({
   // hiện, dù nằm sâu tới đâu — giấu một ô đang tích là giấu lý do danh sách ngắn.
   const purchaseTop = purchase.filter((facet, index) => index < 4 || purchaseSelected.has(facet.value));
   const purchaseRest = purchase.filter((facet) => !purchaseTop.includes(facet));
+
+  // Stack đi theo đúng khuôn của loại mua hàng: năm cái đông nhất hiện sẵn,
+  // phần còn lại gập vào, cái đang chọn luôn hiện.
+  const stack = result.facets.skills;
+  const stackSelected = new Set(readParams(params, 'stack'));
+  const stackTop = stack.filter((facet, index) => index < 5 || stackSelected.has(facet.value));
+  const stackRest = stack.filter((facet) => !stackTop.includes(facet));
 
   const salaryBands = result.facets.salary.filter((facet) => facet.value !== FACET_NONE);
   const salaryNone = result.facets.salary.find((facet) => facet.value === FACET_NONE);
@@ -109,26 +135,97 @@ export function FieldFilterPanel({
         </Group>
       )}
 
-      <Group icon="building" title="Loại mua hàng" gap="tight">
-        {purchase.length === 0 && <NoData />}
-        {purchaseTop.map((facet) => (
-          <CheckRow key={facet.value} name="loai" facet={facet} checked={purchaseSelected.has(facet.value)} />
-        ))}
-        {purchaseRest.length > 0 && (
-          <details className="group">
-            <summary className="btn btn-ghost w-fit list-none gap-1.5 text-xs [&::-webkit-details-marker]:hidden">
-              <span className="group-open:hidden">+ {purchaseRest.length} nhóm khác</span>
-              <span className="hidden group-open:inline">Thu gọn</span>
-              <Glyph name="chevronDown" size={13} className="transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="mt-2 flex flex-col gap-2">
-              {purchaseRest.map((facet) => (
-                <CheckRow key={facet.value} name="loai" facet={facet} checked={purchaseSelected.has(facet.value)} />
-              ))}
-            </div>
-          </details>
-        )}
-      </Group>
+      {byStack ? (
+        <>
+          <Group
+            icon="code"
+            title="Ngôn ngữ & nền tảng"
+            note={`${cover(result.coverage.skill)} bóc được`}
+            gap="tight"
+          >
+            {stack.length === 0 ? (
+              // Không phải "chưa có dữ liệu" chung chung: ở nghề phần mềm, bảng
+              // `Skill` rỗng là một sự cố nạp dữ liệu, và người đọc phải biết
+              // phải làm gì với nó.
+              <p className="text-xs text-neutral-600">
+                Chưa bóc được stack nào. Chạy <code className="font-mono">npm run db:seed -- --ws swe</code>{' '}
+                rồi <code className="font-mono">npm run reparse -- --ws swe</code>.
+              </p>
+            ) : (
+              stackTop.map((facet) => (
+                <CheckRow
+                  key={facet.value}
+                  name="stack"
+                  facet={facet}
+                  checked={stackSelected.has(facet.value)}
+                  bold
+                />
+              ))
+            )}
+            {stackRest.length > 0 && (
+              <details className="group">
+                {/* `.btn` khai `white-space: nowrap`, mà dòng này dài hơn cột
+                    lọc ở mọi bề rộng dưới ~1800px — nên phải cho xuống dòng,
+                    nếu không đuôi bị cắt cụt ngay giữa một tên stack. */}
+                <summary className="btn btn-ghost w-full list-none justify-start gap-1.5 text-left text-xs whitespace-normal [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0 group-open:hidden">
+                    + {stackRest.length} stack khác ({stackRest.slice(0, 3).map((f) => f.label).join(', ')}
+                    {stackRest.length > 3 ? '…' : ''})
+                  </span>
+                  <span className="hidden group-open:inline">Thu gọn</span>
+                  <Glyph name="chevronDown" size={13} className="transition-transform group-open:rotate-180" />
+                </summary>
+                {/* Danh mục stack dài hơn danh mục loại mua hàng nhiều — cuộn
+                    trong khung thay vì đẩy nút "Áp bộ lọc" xuống quá xa. */}
+                <div className="mt-2 flex max-h-64 flex-col gap-2 overflow-y-auto">
+                  {stackRest.map((facet) => (
+                    <CheckRow
+                      key={facet.value}
+                      name="stack"
+                      facet={facet}
+                      checked={stackSelected.has(facet.value)}
+                      bold
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
+          </Group>
+
+          <hr className="hr" />
+
+          <Group icon="briefcase" title="Cấp bậc" note={cover(result.coverage.level)}>
+            <Tags name="cap" options={result.facets.levels} params={params} />
+          </Group>
+
+          <hr className="hr" />
+
+          <Group icon="globe" title="Hình thức làm" note={cover(result.coverage.workMode)}>
+            <Tags name="ht" options={result.facets.workModes} params={params} />
+          </Group>
+        </>
+      ) : (
+        <Group icon="building" title="Loại mua hàng" gap="tight">
+          {purchase.length === 0 && <NoData />}
+          {purchaseTop.map((facet) => (
+            <CheckRow key={facet.value} name="loai" facet={facet} checked={purchaseSelected.has(facet.value)} />
+          ))}
+          {purchaseRest.length > 0 && (
+            <details className="group">
+              <summary className="btn btn-ghost w-fit list-none gap-1.5 text-xs [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">+ {purchaseRest.length} nhóm khác</span>
+                <span className="hidden group-open:inline">Thu gọn</span>
+                <Glyph name="chevronDown" size={13} className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {purchaseRest.map((facet) => (
+                  <CheckRow key={facet.value} name="loai" facet={facet} checked={purchaseSelected.has(facet.value)} />
+                ))}
+              </div>
+            </details>
+          )}
+        </Group>
+      )}
 
       <hr className="hr" />
 
@@ -312,13 +409,30 @@ function Square({ small = false }: { small?: boolean }) {
   );
 }
 
-/** Ô tích vuông — cho chiều có ÍT giá trị và nhãn DÀI (loại mua hàng). */
-function CheckRow({ name, facet, checked }: { name: string; facet: Facet; checked: boolean }) {
+/** Ô tích vuông — cho chiều có ÍT giá trị và nhãn DÀI (loại mua hàng, stack). */
+function CheckRow({
+  name,
+  facet,
+  checked,
+  bold = false,
+}: {
+  name: string;
+  facet: Facet;
+  checked: boolean;
+  /**
+   * Nhãn in Archivo 800. Dùng cho tên stack: "TypeScript", "PostgreSQL" là
+   * TÊN RIÊNG của công nghệ, và bản thiết kế in chúng bằng nét tiêu đề để đọc
+   * ra ngay giữa một cột toàn chữ thường.
+   */
+  bold?: boolean;
+}) {
   return (
     <OptionLabel facet={facet} checked={checked} className="gap-2.5 px-2 py-1.75 text-sm">
       <input type="checkbox" name={name} value={facet.value} defaultChecked={checked} className="peer sr-only" />
       <Square />
-      <span className="min-w-0 flex-1 truncate">{facet.label}</span>
+      <span className={cx('min-w-0 flex-1 truncate', bold && 'font-heading font-extrabold')}>
+        {facet.label}
+      </span>
       <span className="tnum flex-none text-xs text-neutral-700 peer-checked:font-extrabold peer-checked:text-accent-700">
         {facet.count}
       </span>

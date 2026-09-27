@@ -81,10 +81,10 @@ export default async function OpsPage({ params }: { params: Promise<{ ws: string
 
   return (
     <>
-      <section className="flex flex-wrap items-end gap-6 border-b-2 border-divider px-4 pt-7.5 pb-6.5 sm:px-6">
+      <section className="flex flex-wrap items-end gap-6 border-b-2 border-divider px-(--pad) pt-7.5 pb-6.5">
         <div className="min-w-0 flex-[1_1_400px]">
-          <h1 className="mb-2.5 text-[32px] leading-[1.05] sm:text-[38px]">Nguồn &amp; vận hành</h1>
-          <p className="max-w-155 text-[15px] leading-normal text-pretty text-neutral-800">
+          <h1 className="mb-2.5 text-(length:--h-page) leading-[1.05]">Nguồn &amp; vận hành</h1>
+          <p className="max-w-(--prose) text-[15px] leading-normal text-pretty text-neutral-800">
             Mình công khai luôn chỗ yếu: sàn nào đang chạy, lần quét gần nhất, và bao nhiêu tin thật sự
             được kiểm còn-sống.
           </p>
@@ -116,7 +116,7 @@ export default async function OpsPage({ params }: { params: Promise<{ ws: string
           return (
             <div
               key={source.code}
-              className="srcrow flex-[1_1_300px] border-r border-b-2 border-divider px-4 py-5.5 sm:px-6"
+              className="srcrow flex-[1_1_300px] border-r border-b-2 border-divider px-(--pad) py-5.5"
             >
               <div className="mb-3 flex items-center gap-2">
                 <LiveDot size={8} />
@@ -148,7 +148,7 @@ export default async function OpsPage({ params }: { params: Promise<{ ws: string
         })}
 
         {silentActive.length + inactive.length > 0 && (
-          <div className="flex-[1_1_300px] border-b-2 border-divider bg-neutral-200 px-4 py-5.5 sm:px-6">
+          <div className="flex-[1_1_300px] border-b-2 border-divider bg-neutral-200 px-(--pad) py-5.5">
             <div className="mb-3 flex items-center gap-2">
               <IdleDot size={8} />
               <span className="font-heading text-base font-extrabold text-neutral-700">
@@ -184,7 +184,7 @@ export default async function OpsPage({ params }: { params: Promise<{ ws: string
 
       <section className="flex flex-wrap items-stretch">
         {/* ── 2. Đường đi của một tin ────────────────────────────────────── */}
-        <div className="min-w-0 flex-[1_1_380px] border-divider px-4 pt-6.5 pb-9 sm:px-6 md:border-r-2">
+        <div className="min-w-0 flex-[1_1_380px] border-divider px-(--pad) pt-6.5 pb-9 md:border-r-2">
           <h5 className="mb-4.5">Đường đi của một tin</h5>
           <div className="flex flex-col border-b border-divider">
             <Step value={formatCount(overview.alive)}>
@@ -246,7 +246,7 @@ export default async function OpsPage({ params }: { params: Promise<{ ws: string
         </div>
 
         {/* ── 3. Nhật ký quét ────────────────────────────────────────────── */}
-        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-5.5 border-t-2 border-divider px-4 pt-6.5 pb-9 sm:px-6 md:border-t-0">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-5.5 border-t-2 border-divider px-(--pad) pt-6.5 pb-9 md:border-t-0">
           <div>
             <h5 className="mb-4">Nhật ký quét</h5>
             {runs.length === 0 ? (

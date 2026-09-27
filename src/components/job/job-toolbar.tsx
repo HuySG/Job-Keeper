@@ -54,7 +54,7 @@ export function JobToolbar({
     });
 
   return (
-    <div className="relative flex flex-wrap items-center gap-2.5 border-b-2 border-divider bg-bg px-4 py-3.5 sm:px-6">
+    <div className="relative flex flex-wrap items-center gap-2.5 border-b-2 border-divider bg-bg px-(--pad) py-3.5">
       <form method="get" role="search" className="relative flex-[1_1_280px] sm:max-w-105">
         {keep(['province', 'level', 'source', 'salaryMin', 'days', 'salaryOnly', 'includeDead', 'sort'])}
         <label>
@@ -97,7 +97,7 @@ export function JobToolbar({
 
         <form
           method="get"
-          className="absolute inset-x-0 top-full z-10 flex flex-wrap items-end gap-3 border-b-2 border-divider bg-bg px-4 py-4 shadow-md sm:px-6"
+          className="absolute inset-x-0 top-full z-10 flex flex-wrap items-end gap-3 border-b-2 border-divider bg-bg px-(--pad) py-4 shadow-md"
         >
           {keep(['q', 'sort'])}
           <Select name="province" label="Tỉnh / thành" value={readParam(params, 'province')} placeholder="Mọi nơi">

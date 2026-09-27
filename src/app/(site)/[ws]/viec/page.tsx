@@ -56,12 +56,12 @@ export default async function JobListPage({
 
   return (
     <>
-      <section className="brand-field px-4 pt-8 sm:px-6">
+      <section className="brand-field px-(--pad) pt-8">
         <div className="flex flex-wrap items-end gap-6 pb-6.5">
           <div className="min-w-0 flex-[1_1_420px]">
             <Kicker>Toàn bộ tin đã gom · chưa lọc theo ngành</Kicker>
-            <h1 className="mb-2.5 text-[34px] leading-[1.04] sm:text-[42px]">Kho tin</h1>
-            <p className="max-w-140 text-base leading-normal text-pretty text-neutral-800">
+            <h1 className="mb-2.5 text-(length:--h-hero) leading-[1.04]">Kho tin</h1>
+            <p className="max-w-(--prose) text-base leading-normal text-pretty text-neutral-800">
               Dùng khi bạn muốn tự tìm bằng từ khoá, ngoài ngành mình đã lọc sẵn. Ô vuông đậm đầu dòng
               là tin đúng ngành của bạn.
             </p>
@@ -122,7 +122,7 @@ export default async function JobListPage({
         <>
           <JobTable ws={ws} items={page.items} judge={judge} save={save} />
 
-          <div className="flex flex-wrap items-center gap-4 border-t-2 border-divider px-4 pt-5 pb-3 sm:px-6">
+          <div className="flex flex-wrap items-center gap-4 border-t-2 border-divider px-(--pad) pt-5 pb-3">
             <p className="text-[13px] text-neutral-700">
               Đang xem{' '}
               <strong className="text-text">

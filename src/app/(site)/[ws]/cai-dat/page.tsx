@@ -138,11 +138,11 @@ export default async function SettingsPage({
 
   return (
     <>
-      <section className="brand-field flex flex-wrap items-center gap-7 px-4 py-7.5 sm:px-6">
+      <section className="brand-field flex flex-wrap items-center gap-7 px-(--pad) py-7.5">
         <div className="min-w-0 flex-[1_1_420px]">
           <Kicker>Từ điển ngành của bạn · {definition.name}</Kicker>
-          <h1 className="mb-2.5 text-[32px] leading-[1.05] sm:text-[38px]">Dạy mèo biết ngành của bạn</h1>
-          <p className="max-w-140 text-[15px] leading-[1.55] text-pretty text-neutral-800">
+          <h1 className="mb-2.5 text-(length:--h-page) leading-[1.05]">Dạy mèo biết ngành của bạn</h1>
+          <p className="max-w-(--prose) text-[15px] leading-[1.55] text-pretty text-neutral-800">
             Mình chấm điểm tin bằng đúng mấy từ khoá dưới đây. Thêm hay bớt từ là số tin khớp đổi ngay —
             không phải chờ quét lại. Chỉ khi bấm “Lưu từ điển” thì danh sách ngành mới đổi theo.
           </p>
@@ -167,19 +167,19 @@ export default async function SettingsPage({
       </section>
 
       {readParam(params, 'da-luu') && !dirty && (
-        <Callout tone="live" className="px-4 sm:px-6" icon={<LiveDot size={9} />}>
+        <Callout tone="live" className="px-(--pad)" icon={<LiveDot size={9} />}>
           Đã lưu từ điển. Trang Ngành, Tổng quan và Lương đã chấm lại theo từ mới.
         </Callout>
       )}
       {readParam(params, 'loi') === 'trong' && (
-        <Callout tone="warn" className="px-4 sm:px-6" icon={<Glyph name="alert" size={18} />}>
+        <Callout tone="warn" className="px-(--pad)" icon={<Glyph name="alert" size={18} />}>
           Chưa lưu: cần ít nhất một từ khớp chắc. Từ khớp yếu không bao giờ tự kéo tin vào ngành, nên
           một từ điển chỉ có từ yếu sẽ luôn ra 0 tin.
         </Callout>
       )}
 
       <div className="flex flex-wrap items-start">
-        <div className="flex min-w-0 flex-[999_1_440px] flex-col gap-7 border-divider px-4 pt-6.5 pb-10 sm:px-6 lg:border-r-2">
+        <div className="flex min-w-0 flex-[999_1_440px] flex-col gap-7 border-divider px-(--pad) pt-6.5 pb-10 lg:border-r-2">
           {/* ── Khớp chắc ──────────────────────────────────────────────── */}
           <Group
             title="Từ khoá khớp chắc"
@@ -306,7 +306,7 @@ export default async function SettingsPage({
         </div>
 
         {/* ── Xem trước & lưu ──────────────────────────────────────────── */}
-        <aside className="flex w-full flex-col gap-5 border-t-2 border-divider px-4 pt-6.5 pb-10 sm:px-6 lg:w-auto lg:max-w-90 lg:flex-[1_1_280px] lg:border-t-0">
+        <aside className="flex w-full flex-col gap-5 border-t-2 border-divider px-(--pad) pt-6.5 pb-10 lg:w-auto lg:max-w-90 lg:flex-[1_1_280px] lg:border-t-0">
           <div className="bg-text p-5 text-neutral-100">
             <p className="mb-2.5 text-[11px] tracking-widest text-accent-400 uppercase">
               {dirty ? 'Xem trước bản nháp' : 'Xem trước kết quả'}

@@ -35,6 +35,7 @@ export type GlyphName =
   | 'chevronLeft'
   | 'chevronRight'
   | 'clock'
+  | 'code'
   | 'external'
   | 'funnel'
   | 'globe'
@@ -89,6 +90,8 @@ const SHAPES: Record<GlyphName, ReactNode> = {
       <path d="M12 6v6l4 2" />
     </>
   ),
+  /* Hai dấu ngoặc nhọn — stack, ngôn ngữ, công nghệ. */
+  code: <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />,
   external: (
     <>
       <path d="M14 4h6v6" />

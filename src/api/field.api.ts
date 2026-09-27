@@ -2,11 +2,13 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import type { Prisma } from '@prisma/client';
+
 import { LIST_INCLUDE, PAGE_SIZE, type JobListItem } from '@/api/job.api';
 import { getDb } from '@/api/workspace-db';
 import { FRESH_CHECK_HOURS } from '@/constants/field';
 import type { WorkspaceId } from '@/constants/workspace';
-import { JobStatus, SaturdayWork } from '@/enums';
+import { JobStatus, LEVEL_ORDER, SaturdayWork, WorkMode } from '@/enums';
 import {
   EXPERIENCE_BANDS,
   FACET_NONE,
@@ -25,6 +27,12 @@ import {
 } from '@/lib/field-match';
 import { matchKeyOf } from '@/lib/cv-profile';
 import { classifyPurchase, type PurchaseTypeResult } from '@/lib/purchase-type';
+import {
+  countSkillFacets,
+  matchesAny,
+  medianSalaryBySkill,
+  type StackRow,
+} from '@/lib/stack-facets';
 import { toMatchKey } from '@/crawler/normalize/text';
 
 // Bảng khoảng lọc nằm ở `lib/field-bands` (không có `server-only`) để giao
@@ -55,8 +63,28 @@ const ALIVE: string[] = [JobStatus.OPEN, JobStatus.STALE];
 // Ngưỡng "vừa kiểm" nay nằm ở `constants/field` để giao diện dùng chung.
 export { FRESH_CHECK_HOURS };
 
+/**
+ * Quan hệ cần kèm cho tin của trang Ngành: đúng `LIST_INCLUDE` cộng kỹ năng.
+ *
+ * Kỹ năng KHÔNG nhét vào `LIST_INCLUDE` dùng chung, vì `LIST_INCLUDE` chạy cả
+ * ở Kho tin và Tổng quan — hai chỗ không hề vẽ stack, nên thêm vào đó là bắt
+ * mọi trang gánh một phép nối chẳng dùng tới.
+ *
+ * Workspace bae có bảng `Skill` RỖNG (nghề thu mua chia theo ngành của công ty,
+ * không theo kỹ năng — xem `constants/skill`), nên ở đó `job.skills` luôn là
+ * mảng rỗng và mọi thứ dựng trên nó tự lặng đi. Đó là lý do vẫn dùng chung MỘT
+ * đường chạy cho cả hai workspace thay vì rẽ nhánh theo `ws`: rẽ nhánh là hai
+ * đường phải cùng đúng, còn mảng rỗng thì tự đúng.
+ */
+const FIELD_INCLUDE = {
+  ...LIST_INCLUDE,
+  skills: { include: { skill: { select: { slug: true, name: true, category: true } } } },
+} satisfies Prisma.JobPostingInclude;
+
+export type FieldCandidate = Prisma.JobPostingGetPayload<{ include: typeof FIELD_INCLUDE }>;
+
 export interface FieldMatchedJob {
-  job: JobListItem;
+  job: FieldCandidate;
   match: MatchResult;
   purchase: PurchaseTypeResult;
 }
@@ -136,6 +164,19 @@ export interface FieldPage {
     saturday: Facet[];
     experience: Facet[];
     salary: Facet[];
+    /**
+     * Stack — NHIỀU GIÁ TRỊ MỖI TIN, khác mọi chiều còn lại.
+     *
+     * Hệ quả phải nói rõ vì nó nhìn như lỗi: các con số ở đây **cộng lại lớn
+     * hơn tổng số tin**. Một tin gọi cả Java lẫn Spring Boot lẫn MySQL thì
+     * được đếm ba lần, mỗi lần ở một ô. Giao diện vì vậy không được ghi
+     * "101 + 59 + … = tổng", và không được dựng thanh tỉ lệ trên tổng số tin.
+     *
+     * Rỗng ở workspace bae — xem `FIELD_INCLUDE`.
+     */
+    skills: Facet[];
+    workModes: Facet[];
+    levels: Facet[];
   };
 
   /**
@@ -153,7 +194,6 @@ export interface FieldPage {
     salaryCount: number;
     topCompanies: Facet[];
     sources: Facet[];
-    levels: Facet[];
     /** Tin đăng trong 24 giờ qua, trong tập đang xem. */
     postedLast24h: number;
     /**
@@ -167,6 +207,21 @@ export interface FieldPage {
       count: number;
       sample: number;
       median: number | null;
+    }[];
+    /**
+     * Trung vị lương theo từng stack, xếp theo trung vị giảm dần.
+     *
+     * Chỉ giữ stack có `sample` đạt `MIN_STACK_SAMPLE`. Trung vị của bốn tin
+     * không phải là "lương của Go", nó là lương của bốn tin — mà đặt cạnh một
+     * cột dựng từ 62 tin thì người đọc không có cách nào biết cái nào mỏng.
+     * `sample` luôn đi kèm để giao diện ghi mẫu số.
+     */
+    salaryBySkill: {
+      slug: string;
+      name: string;
+      count: number;
+      sample: number;
+      median: number;
     }[];
   };
 
@@ -184,6 +239,10 @@ export interface FieldPage {
     saturday: number;
     experience: number;
     salary: number;
+    /** Tin bóc được ít nhất một stack. 0 ở workspace bae. */
+    skill: number;
+    workMode: number;
+    level: number;
   };
 
   page: number;
@@ -236,6 +295,17 @@ export interface FieldQuery {
   experience?: readonly string[];
   /** Khoảng lương — xem `SALARY_BANDS`. */
   salary?: readonly string[];
+  /**
+   * Slug stack (`java`, `typescript`…). Giữ đúng quy ước chung — nhiều stack
+   * là HOẶC: chọn Java và Go ra tin gọi Java HOẶC Go, không phải tin đòi cả
+   * hai. Người đi tìm việc lọc theo thứ mình BIẾT, và biết thêm một thứ thì
+   * phải ra thêm tin chứ không phải ít đi.
+   */
+  skills?: readonly string[];
+  /** ONSITE | HYBRID | REMOTE. */
+  workModes?: readonly string[];
+  /** INTERN | FRESHER | … | MANAGER — xem `LEVEL_ORDER`. */
+  levels?: readonly string[];
 }
 
 /**
@@ -314,7 +384,7 @@ const loadCandidates = cache(async (ws: WorkspaceId, scopeKey: string) => {
       ...(scope.levels.length ? { level: { in: scope.levels } } : {}),
     },
     orderBy: { postedAt: 'desc' },
-    include: LIST_INCLUDE,
+    include: FIELD_INCLUDE,
   });
 });
 
@@ -439,6 +509,24 @@ export async function scoreField(
       SALARY_BANDS,
       (r) => salaryBandOf(r.job),
     ),
+    // Stack đếm bằng `countSkillFacets` chứ không `countBy`: một tin nằm trong
+    // nhiều ô cùng lúc — xem `lib/stack-facets.ts`.
+    skills: countSkillFacets(stackRows(inField.filter((r) => keep(r, query, 'skills')))),
+    workModes: countBy(
+      inField.filter((r) => keep(r, query, 'workModes')),
+      (r) =>
+        r.job.workMode
+          ? [r.job.workMode, WORK_MODE_LABELS[r.job.workMode] ?? r.job.workMode]
+          : [FACET_NONE, 'Tin không ghi'],
+    ),
+    // Xếp theo THỨ TỰ NGHỀ NGHIỆP (thực tập → quản lý), không theo số tin:
+    // đây là một cái thang, và một cái thang xáo thứ tự thì không đọc được.
+    levels: countByOrder(
+      inField.filter((r) => keep(r, query, 'levels')),
+      (r) => r.job.level ?? FACET_NONE,
+      LEVEL_FACET_ORDER,
+      (value) => LEVEL_LABELS[value] ?? 'Không ghi cấp bậc',
+    ),
   };
 
   // Độ phủ phải dùng ĐÚNG luật mà ô lọc bên cạnh dùng, nếu không hai con số
@@ -453,6 +541,9 @@ export async function scoreField(
     saturday: inField.filter((r) => r.job.saturdayWork !== null).length,
     experience: inField.filter((r) => r.job.yearsExpMin !== null).length,
     salary: inField.filter((r) => salaryValue(r.job) !== null).length,
+    skill: inField.filter((r) => r.job.skills.length > 0).length,
+    workMode: inField.filter((r) => r.job.workMode !== null).length,
+    level: inField.filter((r) => r.job.level !== null).length,
   };
 
   // ── Bước 3: áp bộ lọc rồi mới cắt trang ────────────────────────────────────
@@ -484,7 +575,6 @@ export async function scoreField(
     salaryCount: matched.filter((r) => salaryValue(r.job) !== null).length,
     topCompanies: countBy(matched, (r) => [r.job.company.name, r.job.company.name]).slice(0, 8),
     sources: countBy(matched, (r) => [r.job.source.name, r.job.source.name]),
-    levels: countBy(matched, (r) => (r.job.level ? [r.job.level, LEVEL_LABELS[r.job.level] ?? r.job.level] : [FACET_NONE, 'Không ghi cấp bậc'])),
     postedLast24h: matched.filter((r) => r.job.postedAt.getTime() >= Date.now() - 24 * 60 * 60 * 1000).length,
     salaryByExperience: EXPERIENCE_BANDS.filter((band) => band.value !== FACET_NONE).map((band) => {
       const rows = matched.filter((r) => experienceBandOf(r.job.yearsExpMin) === band.value);
@@ -496,6 +586,10 @@ export async function scoreField(
         sample: values.length,
         median: median(values),
       };
+    }),
+    salaryBySkill: medianSalaryBySkill(stackRows(matched), {
+      minSample: MIN_STACK_SAMPLE,
+      limit: STACK_CHART_LIMIT,
     }),
   };
 
@@ -544,6 +638,32 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 0 ? Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2) : (sorted[mid] ?? null);
 }
 
+/**
+ * Mẫu tối thiểu để một stack được vẽ thành cột lương.
+ *
+ * Cùng tinh thần với `MIN_BAND_SAMPLE` ở `stats.api.ts`. Dưới ngưỡng này thì
+ * cột vẫn vẽ ra được, nhưng nó nói về vài tin lẻ chứ không nói về thị trường —
+ * và một cột ngắn đứng cạnh một cột dài trông y như một sự thật.
+ */
+export const MIN_STACK_SAMPLE = 5;
+
+/** Bao nhiêu stack được vẽ. Quá con số này thì biểu đồ thành một bức tường. */
+const STACK_CHART_LIMIT = 8;
+
+/** Đưa tin của trang Ngành về đúng hình dạng mà `lib/stack-facets` cần. */
+function stackRows(rows: FieldMatchedJob[]): StackRow[] {
+  return rows.map((row) => ({
+    skills: row.job.skills.map((entry) => entry.skill),
+    salary: salaryValue(row.job),
+  }));
+}
+
+const WORK_MODE_LABELS: Record<string, string> = {
+  [WorkMode.ONSITE]: 'Onsite',
+  [WorkMode.HYBRID]: 'Hybrid',
+  [WorkMode.REMOTE]: 'Remote',
+};
+
 const LEVEL_LABELS: Record<string, string> = {
   INTERN: 'Thực tập',
   FRESHER: 'Mới ra trường',
@@ -555,12 +675,26 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 /**
+ * Thang cấp bậc để vẽ ô lọc: thang có sẵn ở `enums`, cộng ô "không ghi" ở
+ * CUỐI. Không tự khai lại bảy cấp ở đây — hai bản sao thì sớm muộn lệch nhau.
+ */
+const LEVEL_FACET_ORDER: readonly string[] = [...LEVEL_ORDER, FACET_NONE];
+
+/**
  * Tin có lọt qua bộ lọc không.
  *
  * `except` cho phép bỏ qua đúng một chiều — dùng khi đếm facet của chính chiều
  * đó, để các lựa chọn còn lại vẫn hiện số thật thay vì 0.
  */
-export type FieldDimension = 'purchaseTypes' | 'districts' | 'saturdays' | 'experience' | 'salary';
+export type FieldDimension =
+  | 'purchaseTypes'
+  | 'districts'
+  | 'saturdays'
+  | 'experience'
+  | 'salary'
+  | 'skills'
+  | 'workModes'
+  | 'levels';
 
 /**
  * Tin có chứa chuỗi tìm kiếm trong tiêu đề hoặc tên công ty không.
@@ -592,12 +726,22 @@ function keep(row: FieldMatchedJob, query: FieldQuery, except: FieldDimension | 
     return chosen.includes(value);
   };
 
+  /** Chiều NHIỀU GIÁ TRỊ — luật ở `lib/stack-facets.ts`, có test riêng. */
+  const onAny = (dim: FieldDimension, values: readonly string[]): boolean =>
+    except === dim || matchesAny(values, query[dim]);
+
   return (
     on('purchaseTypes', row.purchase.slug) &&
     on('districts', job.district ?? FACET_NONE) &&
     on('saturdays', job.saturdayWork ?? FACET_NONE) &&
     on('experience', experienceBandOf(job.yearsExpMin)) &&
-    on('salary', salaryBandOf(job))
+    on('salary', salaryBandOf(job)) &&
+    on('workModes', job.workMode ?? FACET_NONE) &&
+    on('levels', job.level ?? FACET_NONE) &&
+    onAny(
+      'skills',
+      job.skills.map((entry) => entry.skill.slug),
+    )
   );
 }
 
@@ -608,6 +752,9 @@ const DIMENSION_LABELS: Record<FieldDimension, string> = {
   saturdays: 'Lịch thứ 7',
   experience: 'Kinh nghiệm',
   salary: 'Lương',
+  skills: 'Stack',
+  workModes: 'Hình thức làm',
+  levels: 'Cấp bậc',
 };
 
 /**
@@ -698,6 +845,29 @@ function countBy(
   }
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
+
+/**
+ * Như `countBy`, nhưng giữ THỨ TỰ KHAI SẴN thay vì xếp theo số tin, và giữ cả
+ * ô 0 tin — cùng lý do với `countBands`.
+ */
+function countByOrder(
+  rows: FieldMatchedJob[],
+  valueOf: (row: FieldMatchedJob) => string,
+  order: readonly string[],
+  labelOf: (value: string) => string,
+): Facet[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = valueOf(row);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return order.map((value) => ({
+    value,
+    label: labelOf(value),
+    count: counts.get(value) ?? 0,
+  }));
+}
+
 
 /** Danh sách ngành đã định nghĩa, cho ô chọn ở đầu trang. */
 export async function listFields(ws: WorkspaceId): Promise<{ slug: string; name: string }[]> {

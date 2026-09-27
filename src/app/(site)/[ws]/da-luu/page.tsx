@@ -66,10 +66,10 @@ export default async function SavedPage({
 
   return (
     <>
-      <section className="flex flex-wrap items-end gap-6 border-b-2 border-divider px-4 pt-7.5 pb-6 sm:px-6">
+      <section className="flex flex-wrap items-end gap-6 border-b-2 border-divider px-(--pad) pt-7.5 pb-6">
         <div className="min-w-0 flex-[1_1_380px]">
-          <h1 className="mb-2.5 text-[32px] leading-[1.05] sm:text-[38px]">Tin đã lưu</h1>
-          <p className="max-w-145 text-[15px] leading-normal text-pretty text-neutral-800">
+          <h1 className="mb-2.5 text-(length:--h-page) leading-[1.05]">Tin đã lưu</h1>
+          <p className="max-w-(--prose) text-[15px] leading-normal text-pretty text-neutral-800">
             Tin bạn đánh dấu ở lại đây tới khi sàn nguồn đóng tin. Mèo Bae kiểm lại mấy tin này mỗi ngày —
             ưu tiên hơn tin thường.
           </p>
@@ -92,21 +92,28 @@ export default async function SavedPage({
         )}
       </section>
 
-      <div className="flex flex-col gap-3.5 px-4 pt-5.5 pb-10 sm:px-6">
+      {/* Chia cột ở màn rất rộng, cùng ngưỡng và cùng lý do với trang Ngành —
+          xem chú thích ở `[ws]/nganh/page.tsx`. Ô khoá sửa và khối lời nhắn
+          cuối trang chiếm trọn hàng. */}
+      <div className="grid grid-cols-1 gap-3.5 px-(--pad) pt-5.5 pb-10 min-[1700px]:grid-cols-2 min-[2600px]:grid-cols-3">
         {!state.ready ? (
-          <Empty title="Bảng tin đã lưu chưa có trong CSDL">
-            Mã mới đã lên nhưng CSDL chưa được cập nhật. Chạy <Cmd>npm run db:push -- --ws {ws}</Cmd> một lần — lệnh
-            này chỉ THÊM bảng <Cmd>SavedJob</Cmd>, không đụng dữ liệu cũ.
-          </Empty>
+          <div className="col-span-full">
+            <Empty title="Bảng tin đã lưu chưa có trong CSDL">
+              Mã mới đã lên nhưng CSDL chưa được cập nhật. Chạy <Cmd>npm run db:push -- --ws {ws}</Cmd> một lần — lệnh
+              này chỉ THÊM bảng <Cmd>SavedJob</Cmd>, không đụng dữ liệu cũ.
+            </Empty>
+          </div>
         ) : (
           <>
-            <EditLock back={wsHref(ws, '/da-luu')} wrong={readParam(params, 'khoa') === 'sai'} />
+            <div className="col-span-full empty:hidden">
+              <EditLock back={wsHref(ws, '/da-luu')} wrong={readParam(params, 'khoa') === 'sai'} />
+            </div>
 
             {[...open, ...closed].map((entry, index) => (
               <SavedCard key={entry.job.id} entry={entry} save={save} delay={Math.min(index, 7) * 0.06} />
             ))}
 
-            <div className="mt-2 flex flex-wrap items-center gap-5.5 border-2 border-dashed border-accent-300 bg-brand-soft px-6 py-8">
+            <div className="col-span-full mt-2 flex flex-wrap items-center gap-5.5 border-2 border-dashed border-accent-300 bg-brand-soft px-6 py-8">
               <Mascot pose="sleep" width={150} />
               <div className="max-w-118 flex-[1_1_300px]">
                 <h5 className="mb-2">

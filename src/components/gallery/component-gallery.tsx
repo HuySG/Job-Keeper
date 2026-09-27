@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { BAE_ACTIONS, Bae, type BaeAction } from '@/components/ui/bae';
 import { BarRow } from '@/components/ui/bar-row';
 import { Glyph } from '@/components/ui/glyph';
 import { Mascot } from '@/components/ui/mascot';
@@ -21,6 +22,24 @@ import { cx } from '@/components/ui/tone';
  */
 
 const REPLAY_EVENT = 'bj:replay';
+
+/**
+ * Nhịp và chỗ dùng của tám hành động, chép từ bảng trong bản thiết kế.
+ *
+ * Để ở TRANG NÀY chứ không ở `ui/bae.tsx`: đây là chữ mô tả cho người đọc bộ
+ * thành phần, không phải thứ component cần để vẽ. Nhét vào component là bắt mọi
+ * trang có Bae tải theo tám đoạn văn không bao giờ hiện ra.
+ */
+const BAE_ACTION_TEXT: Record<BaeAction, { name: string; spec: string; where: string }> = {
+  fan: { name: 'Quạt mát', spec: '1,5s · ease-in-out · vòng lặp', where: 'Trạng thái nghỉ — hero và màn chờ' },
+  wave: { name: 'Vẫy tay', spec: '0,5s · ease-in-out · vòng lặp', where: 'Khi mở web và khi lưu tin thành công' },
+  hop: { name: 'Nhảy mừng', spec: '1s · cubic-bezier · vòng lặp', where: 'Khi tìm được tin khớp chắc' },
+  dance: { name: 'Nhún nhảy', spec: '1,15s · ease-in-out · vòng lặp', where: 'Khi quét xong mọi sàn' },
+  twirl: { name: 'Xoay vòng', spec: '1,6s · cubic-bezier · vòng lặp', where: 'Khi đổi bộ lọc sang ngành khác' },
+  walk: { name: 'Đi tìm tin', spec: '1,3s · ease-in-out · vòng lặp', where: 'Trong lúc hệ thống đang quét' },
+  read: { name: 'Đọc tin', spec: '2,2s · ease-in-out · vòng lặp', where: 'Khối “tin cần soi lại” ở trang Ngành' },
+  shy: { name: 'Mắc cỡ', spec: '3,4s · ease-in-out · vòng lặp', where: 'Màn rỗng và màn cảm ơn' },
+};
 
 /** Nút "Chạy lại toàn bộ" ở hero — nằm ngoài lưới nên nói chuyện bằng sự kiện. */
 export function ReplayButton() {
@@ -57,6 +76,7 @@ function Grid({ brand }: { brand: { label: string; swatch: string } }) {
   const [checked, setChecked] = useState(true);
   const [open, setOpen] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [act, setAct] = useState<BaeAction>('fan');
   const [toast, setToast] = useState(false);
   const [dialog, setDialog] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -333,6 +353,57 @@ function Grid({ brand }: { brand: { label: string; swatch: string } }) {
           <Pose label="rỗng / ngủ">
             <Mascot pose="sleep" width={110} zzz />
           </Pose>
+        </div>
+      </Demo>
+
+      <Demo
+        group="Linh vật"
+        title="Tám hành động của Bae"
+        note="Bấm để đổi. Bím tóc đưa nhẹ ở mọi hành động; quạt có nhịp riêng, luôn nhanh hơn thân."
+      >
+        <div className="flex w-full flex-wrap items-end gap-4">
+          <div className="swatch flex-none">
+            <Bae action={act} width={110} />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+            <div className="flex flex-wrap gap-1.5">
+              {BAE_ACTIONS.map((action) => (
+                <button
+                  key={action}
+                  type="button"
+                  onClick={() => setAct(action)}
+                  aria-pressed={action === act}
+                  className={cx(
+                    'tag cursor-pointer px-2.5 py-1.5 text-xs',
+                    action === act ? 'tag-solid' : 'tag-neutral hover:bg-neutral-300',
+                  )}
+                >
+                  {BAE_ACTION_TEXT[action].name}
+                </button>
+              ))}
+            </div>
+            <div>
+              <p className="font-heading text-[15px] font-extrabold">{BAE_ACTION_TEXT[act].name}</p>
+              <p className="text-[13px] text-neutral-800">{BAE_ACTION_TEXT[act].spec}</p>
+              <p className="mt-1 text-[13px] leading-[1.55] text-pretty text-neutral-700">
+                {BAE_ACTION_TEXT[act].where}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Demo>
+
+      <Demo
+        group="Linh vật"
+        title="Bae đọc rõ ở mọi cỡ"
+        note="Cùng một hình, không làm mờ cạnh. Dưới 30px thì quạt tự tắt cho gọn."
+      >
+        <div className="flex w-full flex-wrap items-end gap-6">
+          {[28, 46, 78, 110].map((width) => (
+            <Pose key={width} label={`${width}px`}>
+              <Bae action="fan" width={width} />
+            </Pose>
+          ))}
         </div>
       </Demo>
 

@@ -30,10 +30,10 @@ export default async function ComponentsPage() {
 
   return (
     <>
-      <section className="brand-field flex flex-wrap items-center gap-7 px-4 py-8.5 sm:px-6">
+      <section className="brand-field flex flex-wrap items-center gap-7 px-(--pad) py-8.5">
         <div className="min-w-0 flex-[1_1_420px]">
           <Kicker>Thành phần lõi &amp; chuyển động</Kicker>
-          <h1 className="mb-2.5 text-[34px] leading-[1.04] sm:text-[42px]">Bộ thành phần của Bae-Job</h1>
+          <h1 className="mb-2.5 text-(length:--h-hero) leading-[1.04]">Bộ thành phần của Bae-Job</h1>
           <p className="max-w-145 text-base leading-[1.55] text-pretty text-neutral-800">
             Mỗi khối dưới đây là một thành phần thật, bấm thử được, kèm đúng đoạn chuyển động nó dùng
             trong app. Dùng trang này làm nguồn khi dựng màn mới.
@@ -51,7 +51,7 @@ export default async function ComponentsPage() {
         <Mascot pose="sit" width={86} />
       </section>
 
-      <div className="border-b-2 border-divider px-4 py-5 sm:px-6">
+      <div className="border-b-2 border-divider px-(--pad) py-5">
         <AppearanceForm appearance={appearance} ws={ws} />
       </div>
 

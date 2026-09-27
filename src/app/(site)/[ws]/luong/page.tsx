@@ -66,14 +66,14 @@ export default async function SalaryPage({ params }: { params: Promise<{ ws: str
 
   return (
     <>
-      <section className="brand-field px-4 py-9 text-text sm:px-6">
+      <section className="brand-field px-(--pad) py-9 text-text">
         <div className="flex flex-wrap items-end gap-7">
           <div className="min-w-0 flex-[1_1_380px]">
             <Kicker>{scope.join(' · ')}</Kicker>
-            <h1 className="mb-2.5 text-[34px] leading-[1.03] text-pretty sm:text-[46px]">
+            <h1 className="mb-2.5 text-(length:--h-hero) leading-[1.03] text-pretty">
               Lương thật, chỉ tính trên tin dám ghi số
             </h1>
-            <p className="max-w-135 text-base leading-normal text-pretty text-neutral-800">
+            <p className="max-w-(--prose) text-base leading-normal text-pretty text-neutral-800">
               {formatCount(stats.salaryCount)} trong {formatCount(total)} tin có ghi lương.{' '}
               {formatCount(negotiable)} tin còn lại ghi “thoả thuận” — mình không đoán hộ.
             </p>
@@ -102,7 +102,7 @@ export default async function SalaryPage({ params }: { params: Promise<{ ws: str
         </Empty>
       ) : (
         <section className="flex flex-wrap items-start">
-          <div className="min-w-0 flex-[1_1_420px] border-divider px-4 pt-7 pb-9 sm:px-6 md:border-r-2">
+          <div className="min-w-0 flex-[1_1_420px] border-divider px-(--pad) pt-7 pb-9 md:border-r-2">
             <h5 className="mb-4.5">Phân bố lương · {formatCount(stats.salaryCount)} tin</h5>
             {/* Đọc được thì bấm được: dòng nói "15–25 tr nhiều tin nhất" cũng
                 chính là chỗ lọc lấy đúng nhóm đó ở trang Ngành. */}
@@ -142,7 +142,7 @@ export default async function SalaryPage({ params }: { params: Promise<{ ws: str
             </p>
           </div>
 
-          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-7 border-t-2 border-divider px-4 pt-7 pb-9 sm:px-6 md:border-t-0">
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-7 border-t-2 border-divider px-(--pad) pt-7 pb-9 md:border-t-0">
             <div>
               <h5 className="mb-4">Trung vị theo kinh nghiệm</h5>
               <div className="flex flex-col border-b border-divider">

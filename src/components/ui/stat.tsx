@@ -38,13 +38,27 @@ export function StatStrip({
   );
 }
 
+// Nền 10rem trên điện thoại: hai ô một hàng thay vì bốn ô chồng dọc chiếm trọn
+// màn hình đầu tiên. Từ `sm` trở lên mới về đúng nền của bản thiết kế.
+//
+// Con số của hai cỡ lớn dùng `--n-stat` (clamp 30→46px) chứ không phải một số
+// cố định: đây là thứ đập vào mắt đầu tiên ở mỗi trang, nên nó phải nở theo
+// màn hình cùng nhịp với tiêu đề hero. Cỡ `md` giữ số cố định — dải mảnh của
+// Kho tin nằm trong một thanh công cụ, và một con số biết phình ra ở đó sẽ đẩy
+// cả thanh cao lên.
 const SIZE = {
-  // Nền 10rem trên điện thoại: hai ô một hàng thay vì bốn ô chồng dọc chiếm
-  // trọn màn hình đầu tiên. Từ `sm` trở lên mới về đúng nền của bản thiết kế.
   /** Hero trang Ngành. */
-  lg: { cell: 'basis-40 px-5 pt-4.5 pb-5 sm:basis-50', value: 'text-[34px]', unit: 'text-[17px]' },
+  lg: {
+    cell: 'basis-40 px-5 pt-4.5 pb-5 sm:basis-50',
+    value: 'text-(length:--n-stat)',
+    unit: 'text-[17px]',
+  },
   /** Dải chỉ số dưới hero Tổng quan. */
-  xl: { cell: 'basis-40 px-6 py-5.5 sm:basis-55', value: 'text-[38px]', unit: 'text-[18px]' },
+  xl: {
+    cell: 'basis-40 px-6 py-5.5 sm:basis-55',
+    value: 'text-(length:--n-stat-xl)',
+    unit: 'text-[18px]',
+  },
   /** Dải mảnh của Kho tin. */
   md: { cell: 'basis-40 px-5 pt-4 pb-4.5 sm:basis-45', value: 'text-[30px]', unit: 'text-base' },
 } as const;

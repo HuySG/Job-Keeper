@@ -104,14 +104,14 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
 
   return (
     <>
-      <div className="border-b-2 border-divider px-4 py-3.5 sm:px-6">
+      <div className="border-b-2 border-divider px-(--pad) py-3.5">
         <a href={wsHref(ws, fromField ? '/nganh' : '/viec')} className="btn btn-ghost gap-1.75 text-[13px]">
           <Glyph name="chevronLeft" size={14} />
           {fromField && field ? `Về danh sách ${formatCount(field.total)} tin` : 'Về kho tin'}
         </a>
       </div>
 
-      <section className="brand-field flex flex-wrap items-end gap-6 px-4 py-7.5 sm:px-6">
+      <section className="brand-field flex flex-wrap items-end gap-6 px-(--pad) py-7.5">
         <div className="min-w-0 flex-[1_1_420px]">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {inField && match ? (
@@ -136,7 +136,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
               </span>
             )}
           </div>
-          <h1 className="mb-2.5 text-[28px] leading-[1.08] text-pretty sm:text-[38px]">{job.title}</h1>
+          <h1 className="mb-2.5 text-(length:--h-page) leading-[1.08] text-pretty">{job.title}</h1>
           <p className="flex items-center gap-2 text-base text-neutral-800">
             <Glyph name="building" size={16} stroke="var(--color-accent-800)" />
             {job.company.name}
@@ -154,7 +154,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
       {job.status !== 'OPEN' && (
         <Callout
           tone="warn"
-          className="px-4 sm:px-6"
+          className="px-(--pad)"
           icon={<Glyph name="alert" size={18} strokeWidth={1.9} />}
         >
           <strong className="font-extrabold">{status.label}.</strong> {status.hint}
@@ -163,7 +163,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
       )}
 
       <div className="flex flex-wrap items-start">
-        <div className="flex min-w-0 flex-[999_1_460px] flex-col gap-6.5 border-divider px-4 pt-6.5 pb-10 sm:px-6 lg:border-r-2">
+        <div className="flex min-w-0 flex-[999_1_460px] flex-col gap-6.5 border-divider px-(--pad) pt-6.5 pb-10 lg:border-r-2">
           <div className="flex flex-wrap border-2 border-divider [&>*:not(:last-child)]:border-r [&>*:not(:last-child)]:border-divider">
             <Cell icon="pin" label="Khu vực">
               {[job.district, province].filter(Boolean).join(', ') || 'Không ghi'}
@@ -255,7 +255,7 @@ export default async function JobDetailPage({ params, searchParams }: PageProps)
           </div>
         </div>
 
-        <aside className="flex w-full flex-col gap-5.5 border-t-2 border-divider px-4 pt-6.5 pb-10 sm:px-6 lg:w-auto lg:max-w-90 lg:flex-[1_1_280px] lg:border-t-0">
+        <aside className="flex w-full flex-col gap-5.5 border-t-2 border-divider px-(--pad) pt-6.5 pb-10 lg:w-auto lg:max-w-90 lg:flex-[1_1_280px] lg:border-t-0">
           <div className="flex flex-col gap-2.5">
             <a
               href={job.url}

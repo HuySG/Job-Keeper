@@ -1,4 +1,6 @@
+import { cx } from '@/components/ui/tone';
 import { PURCHASE_TYPES, PURCHASE_TYPE_UNKNOWN } from '@/constants/purchase';
+import { SKILL_SEEDS } from '@/constants/skill';
 import { EXPERIENCE_BANDS, FACET_NONE, SALARY_BANDS } from '@/lib/field-bands';
 import { readFlag, readParam, readParams, urlWithoutValue, type SearchParams } from '@/lib/query';
 
@@ -32,6 +34,9 @@ export function activeFieldFilters(params: SearchParams): ActiveFilter[] {
   };
 
   add('loai', PURCHASE_LABELS, true);
+  add('stack', SKILL_LABELS, true);
+  add('cap', LEVEL_LABELS, true);
+  add('ht', WORK_MODE_LABELS, true);
   add('luong', SALARY_LABELS, true);
   add('kn', EXPERIENCE_LABELS, true);
   add('quan', DISTRICT_LABELS, false);
@@ -62,16 +67,24 @@ export function FieldActiveFilters({
   pathname,
   params,
   field,
+  className,
 }: {
   pathname: string;
   params: SearchParams;
   field: string;
+  /**
+   * Nhận lớp từ ngoài vì trang Ngành xếp danh sách tin thành lưới nhiều cột ở
+   * màn rộng, và dải chip phải chiếm trọn hàng. Truyền lớp vào đây chứ không
+   * bọc thêm một `<div>` ở chỗ gọi: component này trả `null` khi chưa lọc gì,
+   * mà một `<div>` rỗng trong lưới vẫn ăn một ô và một khoảng `gap`.
+   */
+  className?: string;
 }) {
   const chips = activeFieldFilters(params);
   if (chips.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[13px]">
+    <div className={cx('flex flex-wrap items-center gap-2 text-[13px]', className)}>
       <span className="text-neutral-700">Đang lọc:</span>
       {chips.map((chip) => (
         <a
@@ -118,3 +131,33 @@ const SATURDAY_LABELS: Record<string, string> = {
 
 /** Quận lưu thẳng tên đọc được, chỉ ô "không ghi" cần dịch. */
 const DISTRICT_LABELS: Record<string, string> = { [FACET_NONE]: 'không ghi quận' };
+
+/**
+ * Tên stack tra từ HẠT GIỐNG (`SKILL_SEEDS`), không tra từ bảng `Skill` trong
+ * CSDL: chip phải dựng được mà không cần một lượt truy vấn nữa, và `?stack=xyz`
+ * bịa ra thì phải im lặng đúng như `?kn=3` — xem `onlyKnown` ở trang Ngành.
+ *
+ * Gộp hạt giống của MỌI workspace: một chip chỉ cần biết slug này có thật hay
+ * không, còn nó thuộc nghề nào thì đường dẫn đã nói rồi.
+ */
+const SKILL_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(SKILL_SEEDS).flatMap((seeds) => seeds.map((seed) => [seed.slug, seed.name])),
+);
+
+const LEVEL_LABELS: Record<string, string> = {
+  INTERN: 'thực tập',
+  FRESHER: 'mới ra trường',
+  JUNIOR: 'junior',
+  MID: 'middle',
+  SENIOR: 'senior',
+  LEAD: 'trưởng nhóm',
+  MANAGER: 'quản lý',
+  [FACET_NONE]: 'không ghi cấp bậc',
+};
+
+const WORK_MODE_LABELS: Record<string, string> = {
+  ONSITE: 'onsite',
+  HYBRID: 'hybrid',
+  REMOTE: 'remote',
+  [FACET_NONE]: 'không ghi hình thức làm',
+};

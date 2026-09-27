@@ -137,6 +137,74 @@
   --space-6: 24px;
   --space-8: 32px;
   color-scheme: light;
+
+  /* ── Thang co giãn theo bề rộng màn hình ──────────────────────────────────
+     Chép NGUYÊN từ `:root` của `Bae-Job v2.dc.html`. Bảy giá trị này là thứ
+     làm trang vừa vặn trên cả laptop 1440px lẫn màn 27" 2560px.
+
+     Bản trước đóng băng cả bảy thành số cố định, và đóng băng ĐÚNG Ở 1440px —
+     nên laptop nhìn khớp thiết kế tới từng pixel, còn màn 27" thì chữ và lề
+     đứng nguyên cỡ laptop giữa một tờ giấy không chịu rộng ra. Đo lại ở 2560px:
+     khung hụt 340px, lề hụt 32px, tiêu đề hero hụt 20px, cột chữ hụt 200px.
+
+     `vw` là bề rộng CỬA SỔ, không phải bề rộng tờ giấy. Hai thứ này rời nhau
+     khi cửa sổ vượt `--shell`, và đó là chủ ý: lề trong phải tiếp tục nở cho
+     tới trần của nó, nếu không tờ giấy 1780px sẽ trông như một khối chữ dán
+     sát mép. Mọi clamp đều chạm trần trước 2400px, nên từ 27" trở lên kích
+     thước đứng yên — không có màn nào rộng tới mức chữ phình ra vô hạn. */
+  /* Khung trang chiếm TRỌN bề rộng cửa sổ.
+     Bản thiết kế khai `min(1780px, 100%)`, và bản trước nữa chặn ở 1440px —
+     cả hai đều để lại hai dải pastel ở mép trên màn rộng (390px mỗi bên ở
+     2560px). Bỏ trần theo yêu cầu: màn 27" phải dùng hết màn 27".
+
+     Bỏ được trần này mà chữ vẫn đọc nổi là nhờ giới hạn nằm ở CHỖ KHÁC, đúng
+     chỗ nó thuộc về: `--prose` chặn cột chữ ở 760px, `--rail` chặn cột lọc ở
+     392px, `--pad` mở lề trong tới 56px. Chặn ở khung ngoài là chặn nhầm tầng
+     — nó bóp cả những thứ vốn nên trải rộng (bảng, danh sách, biểu đồ). */
+  --shell: 100%;
+
+  /* ── Dưới 640px: GIỮ NGUYÊN số cũ, không đụng vào ──────────────────────
+     Sàn trong bản thiết kế (lề 22px, hero 38px) là sàn của một bản vẽ cho màn
+     rộng — nó chưa bao giờ chạm một cái điện thoại. Cỡ chữ mobile hiện tại thì
+     đã được chỉnh tay và đang đúng. Nên mobile đứng yên hoàn toàn; chỉ từ `sm`
+     trở lên mới bắt đầu nở. */
+  --pad: 16px;
+  --h-hero: 34px;
+  --h-page: 32px;
+  --n-stat: 34px;
+  --n-stat-xl: 38px;
+  --rail: 280px;
+
+  /* `--prose` là max-width nên ở màn hẹp nó tự vô hiệu — không cần bậc riêng. */
+  --prose: clamp(560px, 40vw, 760px);
+}
+
+/* ── Từ 640px: nở theo bề rộng cửa sổ ─────────────────────────────────────
+   Mỗi SÀN ở đây đúng bằng giá trị `sm:` cũ, nên không bề rộng nào nhỏ đi so
+   với trước — chỉ có to ra. Đó là điều kiện để đây là một bản sửa cho màn 27"
+   chứ không phải một bản vẽ lại cho mọi máy.
+
+   Phần dốc (`vw`) và trần chép từ `:root` của `Bae-Job v2.dc.html`. Mọi clamp
+   chạm trần trước 2400px, nên từ 27" trở lên kích thước đứng yên.
+
+     --h-hero  hero của Tổng quan · Ngành · Kho tin · Lương · Bộ thành phần
+     --h-page  tiêu đề trang phụ, và tên tin ở trang Chi tiết
+     --n-stat  con số lớn trong dải chỉ số (`-xl` là dải của Tổng quan) */
+@media (min-width: 640px) {
+  :root {
+    --pad: clamp(24px, 2.4vw, 56px);
+    --h-hero: clamp(44px, 3.1vw, 64px);
+    --h-page: clamp(38px, 2.5vw, 52px);
+    --n-stat: clamp(34px, 2.1vw, 46px);
+    --n-stat-xl: clamp(38px, 2.4vw, 50px);
+  }
+}
+
+/* Cột lọc chỉ thành cột thật từ `lg`; bậc 1280px giữ đúng con số `xl:` cũ. */
+@media (min-width: 1280px) {
+  :root {
+    --rail: clamp(320px, 21vw, 392px);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -671,6 +739,63 @@
     animation: shake 0.4s ease both;
   }
 
+  /* ── Bae — cô gái áo dài ───────────────────────────────────────────────── */
+  /* Bím tóc đưa nhẹ ở MỌI hành động, kể cả lúc đứng yên: đó là thứ giữ cho
+     hình không chết cứng khi Bae chỉ đứng cạnh một đoạn chữ. */
+  .braid {
+    animation: braid 2.8s ease-in-out infinite;
+  }
+  /* Gốc xoay của quạt là ĐIỂM TAY CẦM (22.5, 27.5 trong khung 34×43), không
+     phải tâm hình — xoay quanh tâm thì quạt trượt khỏi bàn tay. Đơn vị px ở
+     đây là đơn vị của khung vẽ SVG, nên nó đúng ở mọi cỡ hiện ra. */
+  .fan {
+    transform-origin: 22.5px 27.5px;
+    animation: fanwave 1.9s ease-in-out infinite;
+  }
+
+  /* Tám hành động — nhịp chép từ bảng trong bản thiết kế. Thân và quạt là hai
+     nhịp riêng: quạt luôn nhanh hơn thân, nếu không cả người trông như một
+     khối gỗ đung đưa. */
+  .act-fan {
+    transform-origin: bottom center;
+    animation: tiltBody 3s ease-in-out infinite;
+  }
+  .act-fan .fan {
+    animation: waveFan 1.5s ease-in-out infinite;
+  }
+  .act-wave .fan {
+    animation: waveFan 0.5s ease-in-out infinite;
+  }
+  .act-hop {
+    transform-origin: bottom center;
+    animation: hop 1s cubic-bezier(0.3, 0.7, 0.4, 1) infinite;
+  }
+  .act-dance {
+    transform-origin: bottom center;
+    animation: dance 1.15s ease-in-out infinite;
+  }
+  .act-dance .fan {
+    animation: waveFan 0.58s ease-in-out infinite;
+  }
+  .act-twirl {
+    transform-origin: center;
+    animation: twirl 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .act-walk {
+    animation: walkBob 1.3s ease-in-out infinite;
+  }
+  .act-read {
+    transform-origin: bottom center;
+    animation: readnod 2.2s ease-in-out infinite;
+  }
+  .act-read .fan {
+    animation: waveFan 4s ease-in-out infinite;
+  }
+  .act-shy {
+    transform-origin: bottom center;
+    animation: breathe 3.4s ease-in-out infinite;
+  }
+
   /* ── Chờ dữ liệu & phản hồi ────────────────────────────────────────────── */
   .skel {
     display: block;
@@ -698,6 +823,19 @@
   .drawcheck {
     stroke-dasharray: 26;
     animation: drawcheck 0.4s var(--ease-out-soft) both;
+  }
+  /* Màn chờ lúc mở web, và ba chấm chạy dưới tên bước đang làm. */
+  .screenin {
+    animation: screenin 0.42s var(--ease-out-soft) both;
+  }
+  .d1 {
+    animation: dots 1.2s ease-in-out infinite;
+  }
+  .d2 {
+    animation: dots 1.2s ease-in-out 0.2s infinite;
+  }
+  .d3 {
+    animation: dots 1.2s ease-in-out 0.4s infinite;
   }
 
   /* Nội dung dưới màn hiện dần khi cuộn tới. `armed` do JavaScript gắn, nên
@@ -957,6 +1095,144 @@
   }
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* ── Bae — cô gái áo dài ────────────────────────────────────────────────── */
+
+/* Quạt: nhịp nghỉ hẹp (±8°), nhịp có hành động rộng hơn (−16°…22°). */
+@keyframes fanwave {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+@keyframes waveFan {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(22deg);
+  }
+}
+@keyframes braid {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(1px);
+  }
+}
+@keyframes tiltBody {
+  0%,
+  100% {
+    transform: rotate(-2.5deg);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+/* Nhún xuống trước rồi mới bật lên — nhảy mà không lấy đà thì trông như bị
+   kéo dây. `scaleY` là phần lấy đà đó. */
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  14% {
+    transform: translateY(0) scaleY(0.9);
+  }
+  45% {
+    transform: translateY(-16px) scaleY(1.06);
+  }
+  78% {
+    transform: translateY(0) scaleY(0.94);
+  }
+}
+@keyframes dance {
+  0% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  25% {
+    transform: translateY(-6px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(0) rotate(6deg);
+  }
+  75% {
+    transform: translateY(-6px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+}
+/* Xoay bằng cách BÓP NGANG rồi lật âm, không phải `rotateY`: hình điểm ảnh
+   quay trong không gian 3D sẽ bị nội suy và nhoè hết cạnh. */
+@keyframes twirl {
+  0% {
+    transform: scaleX(1);
+  }
+  25% {
+    transform: scaleX(0.2);
+  }
+  50% {
+    transform: scaleX(-1);
+  }
+  75% {
+    transform: scaleX(-0.2);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+@keyframes walkBob {
+  0%,
+  100% {
+    transform: translateX(-5%) translateY(0);
+  }
+  25% {
+    transform: translateX(0) translateY(-3px);
+  }
+  50% {
+    transform: translateX(5%) translateY(0);
+  }
+  75% {
+    transform: translateX(0) translateY(-3px);
+  }
+}
+@keyframes readnod {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(1px);
+  }
+}
+
+/* ── Màn chờ lúc mở web ─────────────────────────────────────────────────── */
+@keyframes screenin {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dots {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
   }
 }
 

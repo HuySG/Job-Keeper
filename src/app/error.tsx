@@ -24,9 +24,9 @@ export default function ErrorPage({
 }) {
   return (
     <div className="pb-12">
-      <div className="mx-auto flex min-h-screen max-w-360 flex-col items-center justify-center gap-6 bg-bg px-4 py-16 text-center shadow-md">
+      <div className="mx-auto flex min-h-screen max-w-(--shell) flex-col items-center justify-center gap-6 bg-bg px-4 py-16 text-center shadow-md">
         <Mascot pose="head" width={96} motion="shake" />
-        <div className="max-w-140">
+        <div className="max-w-(--prose)">
           <h1 className="mb-3 text-[30px] leading-[1.12] sm:text-[34px]">Mèo không lấy được dữ liệu lần này</h1>
           <p className="text-base leading-[1.6] text-pretty text-neutral-800">
             Hay gặp nhất: CSDL gói Free ngủ sau vài phút im ắng, nên cú truy vấn đầu tiên có thể hết giờ chờ.

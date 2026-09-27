@@ -84,14 +84,14 @@ export default async function OverviewPage({ params }: { params: Promise<{ ws: s
   return (
     <>
       {/* ── 1. Lời chào ─────────────────────────────────────────────────── */}
-      <section className="flex flex-wrap items-center gap-7 border-b-2 border-divider px-4 pt-10 pb-8 sm:px-6">
+      <section className="flex flex-wrap items-center gap-7 border-b-2 border-divider px-(--pad) pt-10 pb-8">
         <div className="min-w-0 flex-[1_1_420px]">
           <Kicker>{greeting}</Kicker>
-          <h1 className="mb-3.5 text-[34px] leading-[1.03] text-pretty sm:text-[46px]">
+          <h1 className="mb-3.5 text-(length:--h-hero) leading-[1.03] text-pretty">
             {formatCount(overview.alive)} tin còn hiệu lực
             {field && <>, {formatCount(field.total)} tin đúng ngành bạn</>}
           </h1>
-          <p className="mb-5.5 max-w-145 text-base leading-[1.55] text-pretty text-neutral-800">
+          <p className="mb-5.5 max-w-(--prose) text-base leading-[1.55] text-pretty text-neutral-800">
             Mèo Bae gom tin từ {overview.activeSources} sàn tuyển dụng, chấm điểm bằng từ điển ngành rồi
             loại tin hết hạn. Bạn chỉ cần chọn tin và bấm sang bản gốc.
           </p>
@@ -154,7 +154,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ ws: s
 
       <section className="flex flex-wrap items-start">
         {/* ── 2. Có gì mới cho tôi ──────────────────────────────────────── */}
-        <div className="min-w-0 flex-[1_1_420px] border-divider px-4 pt-6.5 pb-9 sm:px-6 md:border-r-2">
+        <div className="min-w-0 flex-[1_1_420px] border-divider px-(--pad) pt-6.5 pb-9 md:border-r-2">
           <h5 className="mb-4">Tin mới cho ngành của bạn</h5>
           {latest.length === 0 ? (
             <p className="text-sm text-neutral-700">
@@ -204,7 +204,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ ws: s
           )}
         </div>
 
-        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-6.5 border-t-2 border-divider px-4 pt-6.5 pb-9 sm:px-6 md:border-t-0">
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-6.5 border-t-2 border-divider px-(--pad) pt-6.5 pb-9 md:border-t-0">
           {/* ── 3. Con số dựa vào đâu ─────────────────────────────────── */}
           <div>
             <h5 className="mb-3.5">Tin về từ sàn nào</h5>
